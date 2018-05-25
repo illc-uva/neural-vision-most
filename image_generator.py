@@ -24,6 +24,17 @@ all four conditions of the study presented in the paper
     * Pietroski, P., Lidz, J., Hunter, T., & Halberda, J. (2009).
         The Meaning of `Most’: Semantics, Numerosity and Psychology.
         _Mind and Language_, 24(5), 554–585.
+
+Usage as follows:
+    * each trial type has a corresponding method, e.g. `scattered_pairs`
+    * these methods take a `colors_dict` argument, a dictionary whose keys
+        are strings corresponding to matplotlib colors and whose values are
+        the number of dots of that color, e.g.
+        {'y': 9, 'b': 10}
+    * each method returns a list of `Dot`, where a `Dot` is an object with
+        four fields: x, y, radius, and color
+    * the method `make_image` takes such a list of `Dot`s and then
+        generates and saves an image to disk
 """
 
 from collections import namedtuple
@@ -32,7 +43,10 @@ import math
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 
-# TODO: document!
+# TODO: area controlled trials, i.e. smart radius
+# TODO: smart file names, batch generation
+# TODO: parameterize radius size for dot-controlled trials
+
 Dot = namedtuple('Dot', ['x', 'y', 'radius', 'color'])
 
 
@@ -42,10 +56,24 @@ def clip(val, min_val, max_val):
 
 
 def polar_to_cartesian(theta, r):
+    """Converts polar coordinates to Cartesian. """
     return r*math.cos(theta), r*math.sin(theta)
 
 
 def no_overlap(dots, x, y, radius):
+    """Checks whether a new dot will have any overlap with an existing
+    array of dots.
+
+    Args:
+        dots: an iterable of `Dot`s
+        x: x-value of center of new dot
+        y: y-value of center of new dot
+        r: radius of new dot
+
+    Returns:
+        True if the new dot has no overlap with any of the dots in `dots',
+        False otherwise
+    """
     can_add = True
     for dot in dots:
         if ((x - dot.x)**2 + (y - dot.y)**2 <
@@ -54,11 +82,10 @@ def no_overlap(dots, x, y, radius):
     return can_add
 
 
-# TODO: area vs size control, i.e. smart radius
-# TODO: smart file names, batch generation
 def scattered_random(colors_dict, num_pixels=256, padding=16,
                      min_radius=2, max_radius=8):
-
+    """Generates ScatteredRandom images: the dots are scattered
+    randomly through the image. """
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels - padding, num_pixels - padding
     dots = []
@@ -78,6 +105,11 @@ def scattered_random(colors_dict, num_pixels=256, padding=16,
 
 def scattered_pairs(colors_dict, num_pixels=256, padding=16,
                     min_radius=2, max_radius=8):
+    """Generates ScatteredPairs images: the dots are paired together, one of
+    each type of color.  The remaining dots in the dominant color are randomly
+    scattered.
+
+    NOTE: `colors_dict` must have only two keys. """
 
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels - padding, num_pixels - padding
@@ -121,7 +153,10 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
 
 def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
                        min_radius=2, max_radius=8):
+    """Generates ColumnPairsMixed images: the dots are paired in two columns,
+    but which color is in which column depends on the row.
 
+    NOTE: `colors_dict` must have only two keys. """
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
     center = num_pixels / 2
@@ -157,6 +192,10 @@ def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
 
 def column_pairs_sorted(colors_dict, num_pixels=256, pad=5,
                         min_radius=2, max_radius=8):
+    """Generates ColumnPairsSorted images: the dots are paired in two columns,
+    with one color on the left and one on the right.
+
+    NOTE: `colors_dict` must have only two keys. """
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
     center = num_pixels / 2
@@ -184,6 +223,13 @@ def column_pairs_sorted(colors_dict, num_pixels=256, pad=5,
 
 
 def make_image(file_name, dots, num_pixels=256):
+    """Make and save an image from a list of `Dot`s.
+
+    Args:
+        file_name: where to save the image
+        dots: an iterable of `Dot`s to draw
+        num_pixels: the saved image will be a square with num_pixels sides
+    """
 
     plt.rcParams['axes.facecolor'] = 'grey'
     plt.rcParams['axes.linewidth'] = 0
