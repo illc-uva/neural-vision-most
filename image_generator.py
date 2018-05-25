@@ -29,7 +29,8 @@ def no_overlap(dots, x, y, radius):
 # TODO: area vs size control, i.e. smart radius
 # TODO: other trial types
 # TODO: smart file names
-def scattered_random(colors_dict, num_pixels=256, padding=16):
+def scattered_random(colors_dict, num_pixels=256, padding=16,
+                     min_radius=2, max_radius=8):
 
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels - padding, num_pixels - padding
@@ -40,7 +41,7 @@ def scattered_random(colors_dict, num_pixels=256, padding=16):
             while not new_dot_added:
                 x = random.uniform(x_min, x_max)
                 y = random.uniform(y_min, y_max)
-                r = clip(random.gauss(5, 1), 2, 8)
+                r = clip(random.gauss(5, 1), min_radius, max_radius)
                 # avoid overlap with existing circles
                 if no_overlap(dots, x, y, r):
                     dots.append(Dot(x=x, y=y, radius=r, color=color))
@@ -48,7 +49,8 @@ def scattered_random(colors_dict, num_pixels=256, padding=16):
     return dots
 
 
-def scattered_pairs(colors_dict, num_pixels=256, padding=16):
+def scattered_pairs(colors_dict, num_pixels=256, padding=16,
+                    min_radius=2, max_radius=8):
 
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels - padding, num_pixels - padding
@@ -64,9 +66,9 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16):
             # one circle
             x1 = random.uniform(x_min, x_max)
             y1 = random.uniform(y_min, y_max)
-            r1 = clip(random.gauss(5, 1), 2, 8)
+            r1 = clip(random.gauss(5, 1), min_radius, max_radius)
             # get second dot coordinates
-            r2 = clip(random.gauss(5, 1), 2, 8)
+            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
             theta = random.uniform(0, 2*math.pi)
             dist = r1 + r2
             tmp_x2, tmp_y2 = polar_to_cartesian(theta, dist)
@@ -81,13 +83,50 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16):
         while not new_dot_added:
             x = random.uniform(x_min, x_max)
             y = random.uniform(y_min, y_max)
-            r = clip(random.gauss(5, 1), 2, 8)
+            r = clip(random.gauss(5, 1), min_radius, max_radius)
             # avoid overlap with existing circles
             if no_overlap(dots, x, y, r):
                 dots.append(Dot(x=x, y=y, radius=r, color=sort_dict[1][0]))
                 new_dot_added = True
 
     return dots
+
+
+def column_pairs_mixed(colors_dict, num_pixels=256, y_pad=5,
+                       min_radius=2, max_radius=8):
+
+    assert len(colors_dict) == 2
+    sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
+    center = num_pixels / 2
+    x_vals = (center - max_radius, center + max_radius)
+    y_step = max_radius + 2*y_pad
+    y0 = center + int(sort_dict[1][1] / 2)*y_step
+    num_lower = sort_dict[0][1]
+
+    dots = []
+    for row_num in range(sort_dict[1][1]):
+        first_side = random.choice([0, 1])
+        x1 = x_vals[first_side]
+        y1 = y0 - row_num*y_step
+        r1 = clip(random.gauss(5, 1), min_radius, max_radius)
+        dots.append(Dot(x=x1, y=y1, radius=r1, color=sort_dict[1][0]))
+
+        add_second = False
+        if num_lower < sort_dict[1][1] - row_num:
+            if random.random() < 0.5:
+                add_second = True
+        else:
+            add_second = True
+
+        if add_second:
+            x2 = x_vals[0 if first_side == 1 else 1]
+            y2 = y1
+            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
+            dots.append(Dot(x=x2, y=y2, radius=r2, color=sort_dict[0][0]))
+            num_lower -= 1
+
+    return dots
+
 
 def make_image(file_name, dots,
                num_pixels=256):
@@ -117,4 +156,4 @@ if __name__ == '__main__':
         Dot(x=67, y=22, radius=4, color='y')
     ]
 
-    make_image('test.png', scattered_pairs({'y': 10, 'b': 9}))
+    make_image('test.png', column_pairs_mixed({'y': 10, 'b': 9}))
