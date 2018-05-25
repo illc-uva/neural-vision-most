@@ -2,7 +2,6 @@ from collections import namedtuple
 import random
 import math
 from matplotlib.patches import Circle
-from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 
 # TODO: document!
@@ -27,8 +26,7 @@ def no_overlap(dots, x, y, radius):
 
 
 # TODO: area vs size control, i.e. smart radius
-# TODO: other trial types
-# TODO: smart file names
+# TODO: smart file names, batch generation
 def scattered_random(colors_dict, num_pixels=256, padding=16,
                      min_radius=2, max_radius=8):
 
@@ -92,14 +90,14 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
     return dots
 
 
-def column_pairs_mixed(colors_dict, num_pixels=256, y_pad=5,
+def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
                        min_radius=2, max_radius=8):
 
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
     center = num_pixels / 2
-    x_vals = (center - max_radius, center + max_radius)
-    y_step = max_radius + 2*y_pad
+    x_vals = (center - max_radius - pad/2, center + max_radius + pad/2)
+    y_step = max_radius + 2*pad
     y0 = center + int(sort_dict[1][1] / 2)*y_step
     num_lower = sort_dict[0][1]
 
@@ -128,13 +126,40 @@ def column_pairs_mixed(colors_dict, num_pixels=256, y_pad=5,
     return dots
 
 
-def make_image(file_name, dots,
-               num_pixels=256):
+def column_pairs_sorted(colors_dict, num_pixels=256, pad=5,
+                        min_radius=2, max_radius=8):
+    assert len(colors_dict) == 2
+    sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
+    center = num_pixels / 2
+    x_vals = (center - max_radius - pad/2, center + max_radius + pad/2)
+    y_step = max_radius + 2*pad
+    y0 = center + int(sort_dict[1][1] / 2)*y_step
+    num_lower = sort_dict[0][1]
+    lower_color_side = random.choice([0, 1])
+    higher_color_side = 1 if lower_color_side == 0 else 0
+
+    dots = []
+    for row_num in range(sort_dict[1][1]):
+        x1 = x_vals[higher_color_side]
+        y1 = y0 - row_num*y_step
+        r1 = clip(random.gauss(5, 1), min_radius, max_radius)
+        dots.append(Dot(x=x1, y=y1, radius=r1, color=sort_dict[1][0]))
+
+        if row_num < num_lower:
+            x2 = x_vals[lower_color_side]
+            y2 = y1
+            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
+            dots.append(Dot(x=x2, y=y2, radius=r2, color=sort_dict[0][0]))
+
+    return dots
+
+
+def make_image(file_name, dots, num_pixels=256):
 
     plt.rcParams['axes.facecolor'] = 'grey'
     plt.rcParams['axes.linewidth'] = 0
 
-    fig, ax = plt.subplots(figsize=(1,1), dpi=num_pixels)
+    fig, ax = plt.subplots(figsize=(1, 1), dpi=num_pixels)
 
     ax.set_xlim((0, num_pixels))
     ax.set_ylim((0, num_pixels))
@@ -156,4 +181,4 @@ if __name__ == '__main__':
         Dot(x=67, y=22, radius=4, color='y')
     ]
 
-    make_image('test.png', column_pairs_mixed({'y': 10, 'b': 9}))
+    make_image('test.png', column_pairs_sorted({'y': 10, 'b': 9}))
