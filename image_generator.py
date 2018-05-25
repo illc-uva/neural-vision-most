@@ -44,7 +44,6 @@ from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 
 # TODO: area controlled trials, i.e. smart radius
-# TODO: smart file names, batch generation
 # TODO: parameterize radius size for dot-controlled trials
 
 Dot = namedtuple('Dot', ['x', 'y', 'radius', 'color'])
@@ -248,7 +247,21 @@ def make_image(file_name, dots, num_pixels=256):
     fig.savefig(file_name, facecolor='grey', pad_inches=0)
 
 
+def make_batch(trial_types, color_dicts, num_per_dict):
+
+    for trial_type in trial_types:
+        image_method = globals()[trial_type]
+        for color_dict in color_dicts:
+            for idx in range(num_per_dict):
+                make_image('{}_{}_{}.png'.format(
+                    trial_type,
+                    '_'.join([str(key) + str(color_dict[key])
+                              for key in color_dict]),
+                    idx),
+                    image_method(color_dict))
+
+
 if __name__ == '__main__':
 
-    make_image('test.png', column_pairs_sorted({'y': 10, 'b': 9}))
-    make_image('test2.png', scattered_random({'y': 8, 'b': 3, 'r': 5}))
+    make_batch(['scattered_random'],
+               [{'y': 10, 'b': 9}, {'y': 9, 'b': 10}], 5)
