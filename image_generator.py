@@ -1,3 +1,31 @@
+"""
+Copyright (c) 2018 Shane Steinert-Threlkeld
+
+    *****
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    *****
+
+This module contains methods that generate images of colored dots
+for use in psychological studies, especially those testing numerical abilities.
+In particular, it contains Python implementations of image generators for
+all four conditions of the study presented in the paper
+
+    * Pietroski, P., Lidz, J., Hunter, T., & Halberda, J. (2009).
+        The Meaning of `Most’: Semantics, Numerosity and Psychology.
+        _Mind and Language_, 24(5), 554–585.
+"""
+
 from collections import namedtuple
 import random
 import math
@@ -9,6 +37,7 @@ Dot = namedtuple('Dot', ['x', 'y', 'radius', 'color'])
 
 
 def clip(val, min_val, max_val):
+    """Clips `val` to be in the range [min_val, max_val]. """
     return max(min(val, max_val), min_val)
 
 
@@ -175,10 +204,5 @@ def make_image(file_name, dots, num_pixels=256):
 
 if __name__ == '__main__':
 
-    test_image = [
-        Dot(x=0, y=0, radius=2, color='y'),
-        Dot(x=20, y=53, radius=1.5, color='b'),
-        Dot(x=67, y=22, radius=4, color='y')
-    ]
-
     make_image('test.png', column_pairs_sorted({'y': 10, 'b': 9}))
+    make_image('test2.png', scattered_random({'y': 8, 'b': 3, 'r': 5}))
