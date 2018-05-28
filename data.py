@@ -17,23 +17,35 @@ Copyright (c) 2018 Shane Steinert-Threlkeld
     *****
 """
 # TODO: doc module
+import glob
 import tensorflow as tf
 
 tf.enable_eager_execution()
 
-filenames = tf.matching_files('*.png')
-dataset = tf.data.Dataset.from_tensor_slices(filenames)
-# TODO: include (filenames, labels) above
 
-
-# TODO: label as argument here; or generate label based on filename?...
-def parse_file(filename):
+def parse_file(filename, label):
+    print(filename)
     image_string = tf.read_file(filename)
     image = tf.image.decode_png(image_string, channels=3)
-    tf.to_float(image)
-    return image
+    # label = label_from_filename(filename)
+    return image, label
 
 
+def most_blue_not_yellow(colors_dict):
+    return int(colors_dict['b'] > colors_dict['y'])
+
+
+def label_from_filename(filename, colors=['y', 'b'],
+                        eval_fn=most_blue_not_yellow):
+    strings = filename.split('_')
+    colors_dict = {s[0]: int(s[1:]) for s in strings if s[0] in colors}
+    return eval_fn(colors_dict)
+
+
+filenames = glob.glob('*.png')
+labels = [label_from_filename(filename) for filename in filenames]
+print(labels)
+dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
 dataset = dataset.map(parse_file)
 
 # TODO: shuffle, etc
