@@ -263,5 +263,5 @@ def make_batch(trial_types, color_dicts, num_per_dict):
 
 if __name__ == '__main__':
 
-    make_batch(['scattered_random'],
+    make_batch(['scattered_pairs'],
                [{'y': 10, 'b': 9}, {'y': 9, 'b': 10}], 5)
