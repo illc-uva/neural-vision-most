@@ -82,7 +82,7 @@ def no_overlap(dots, x, y, radius):
 
 
 def scattered_random(colors_dict, num_pixels=256, padding=16,
-                     min_radius=2, max_radius=8):
+                     min_radius=1, max_radius=5):
     """Generates ScatteredRandom images: the dots are scattered
     randomly through the image. """
     x_min, y_min = padding, padding
@@ -94,7 +94,7 @@ def scattered_random(colors_dict, num_pixels=256, padding=16,
             while not new_dot_added:
                 x = random.uniform(x_min, x_max)
                 y = random.uniform(y_min, y_max)
-                r = clip(random.gauss(5, 1), min_radius, max_radius)
+                r = clip(random.gauss(3, 1), min_radius, max_radius)
                 # avoid overlap with existing circles
                 if no_overlap(dots, x, y, r):
                     dots.append(Dot(x=x, y=y, radius=r, color=color))
@@ -103,7 +103,7 @@ def scattered_random(colors_dict, num_pixels=256, padding=16,
 
 
 def scattered_pairs(colors_dict, num_pixels=256, padding=16,
-                    min_radius=2, max_radius=8):
+                    min_radius=1, max_radius=5):
     """Generates ScatteredPairs images: the dots are paired together, one of
     each type of color.  The remaining dots in the dominant color are randomly
     scattered.
@@ -124,9 +124,9 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
             # one circle
             x1 = random.uniform(x_min, x_max)
             y1 = random.uniform(y_min, y_max)
-            r1 = clip(random.gauss(5, 1), min_radius, max_radius)
+            r1 = clip(random.gauss(3, 1), min_radius, max_radius)
             # get second dot coordinates
-            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
+            r2 = clip(random.gauss(3, 1), min_radius, max_radius)
             theta = random.uniform(0, 2*math.pi)
             dist = r1 + r2
             tmp_x2, tmp_y2 = polar_to_cartesian(theta, dist)
@@ -141,7 +141,7 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
         while not new_dot_added:
             x = random.uniform(x_min, x_max)
             y = random.uniform(y_min, y_max)
-            r = clip(random.gauss(5, 1), min_radius, max_radius)
+            r = clip(random.gauss(3, 1), min_radius, max_radius)
             # avoid overlap with existing circles
             if no_overlap(dots, x, y, r):
                 dots.append(Dot(x=x, y=y, radius=r, color=sort_dict[1][0]))
@@ -150,8 +150,8 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
     return dots
 
 
-def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
-                       min_radius=2, max_radius=8):
+def column_pairs_mixed(colors_dict, num_pixels=256, pad=2.5,
+                       min_radius=1, max_radius=5):
     """Generates ColumnPairsMixed images: the dots are paired in two columns,
     but which color is in which column depends on the row.
 
@@ -169,7 +169,7 @@ def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
         first_side = random.choice([0, 1])
         x1 = x_vals[first_side]
         y1 = y0 - row_num*y_step
-        r1 = clip(random.gauss(5, 1), min_radius, max_radius)
+        r1 = clip(random.gauss(3, 1), min_radius, max_radius)
         dots.append(Dot(x=x1, y=y1, radius=r1, color=sort_dict[1][0]))
 
         add_second = False
@@ -182,15 +182,15 @@ def column_pairs_mixed(colors_dict, num_pixels=256, pad=5,
         if add_second:
             x2 = x_vals[0 if first_side == 1 else 1]
             y2 = y1
-            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
+            r2 = clip(random.gauss(3, 1), min_radius, max_radius)
             dots.append(Dot(x=x2, y=y2, radius=r2, color=sort_dict[0][0]))
             num_lower -= 1
 
     return dots
 
 
-def column_pairs_sorted(colors_dict, num_pixels=256, pad=5,
-                        min_radius=2, max_radius=8):
+def column_pairs_sorted(colors_dict, num_pixels=256, pad=2.5,
+                        min_radius=1, max_radius=5):
     """Generates ColumnPairsSorted images: the dots are paired in two columns,
     with one color on the left and one on the right.
 
@@ -209,13 +209,13 @@ def column_pairs_sorted(colors_dict, num_pixels=256, pad=5,
     for row_num in range(sort_dict[1][1]):
         x1 = x_vals[higher_color_side]
         y1 = y0 - row_num*y_step
-        r1 = clip(random.gauss(5, 1), min_radius, max_radius)
+        r1 = clip(random.gauss(3, 1), min_radius, max_radius)
         dots.append(Dot(x=x1, y=y1, radius=r1, color=sort_dict[1][0]))
 
         if row_num < num_lower:
             x2 = x_vals[lower_color_side]
             y2 = y1
-            r2 = clip(random.gauss(5, 1), min_radius, max_radius)
+            r2 = clip(random.gauss(3, 1), min_radius, max_radius)
             dots.append(Dot(x=x2, y=y2, radius=r2, color=sort_dict[0][0]))
 
     return dots
@@ -261,7 +261,30 @@ def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.'):
                     image_method(color_dict))
 
 
+def dicts_from_ratios(ratios, dicts_per_ratio,
+                      colors=['b', 'y'], dot_range=(5, 25)):
+    dicts = []
+    for ratio in ratios:
+        # TODO: better method of generating ratios?
+        multipliers = [n for n in range(1, 10) if n*min(ratio) >= dot_range[0]
+                       and n*max(ratio) <= dot_range[1]]
+        for idx in range(dicts_per_ratio):
+            # reverse the ratio every trial to mix
+            ratio = list(reversed(ratio))
+            mult = random.choice(multipliers)
+            dicts.append({colors[n]: mult*ratio[n] for n in range(len(colors))})
+    return dicts
+
+
 if __name__ == '__main__':
 
-    make_batch(['scattered_pairs', 'scattered_random'],
-               [{'y': 10, 'b': 9}, {'y': 9, 'b': 10}], 5, 'images/test')
+    ratios = [(n, n+1) for n in range(1, 10)]
+    imgs_per_ratio = 100
+    trial_types = ['scattered_random', 'scattered_pairs',
+                   'column_pairs_mixed', 'column_pairs_sorted']
+    color_dicts = dicts_from_ratios(ratios, imgs_per_ratio)
+
+    # make training set
+    make_batch(trial_types, color_dicts, 5, 'images/train')
+    # make test set
+    make_batch(trial_types, color_dicts, 1, 'images/test')
