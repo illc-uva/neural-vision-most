@@ -31,24 +31,36 @@ def parse_file(filename, label):
     return image, label
 
 
-def most_blue_not_yellow(colors_dict):
-    return int(colors_dict['b'] > colors_dict['y'])
+def most(colors_dict, main_color):
+    return int(colors_dict[main_color] >
+               sum(colors_dict[color]
+                   for color in colors_dict if color != main_color))
+
+
+def most_blue(colors_dict):
+    return most(colors_dict, 'b')
 
 
 def label_from_filename(filename, colors=['y', 'b'],
-                        eval_fn=most_blue_not_yellow):
+                        eval_fn=most_blue):
     strings = filename.split('_')
     colors_dict = {s[0]: int(s[1:]) for s in strings if s[0] in colors}
     return eval_fn(colors_dict)
 
 
-filenames = glob.glob('*.png')
-labels = [label_from_filename(filename) for filename in filenames]
-print(labels)
-dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
-dataset = dataset.map(parse_file)
+def make_dataset(filename_pattern, shuffle=True):
+    filenames = glob.glob(filename_pattern)
+    labels = [label_from_filename(filename) for filename in filenames]
+    dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
+    dataset = dataset.map(parse_file)
+    if shuffle:
+        dataset = dataset.shuffle(len(labels))
+    return dataset
+
 
 # TODO: shuffle, etc
+dataset = make_dataset('*.png')
+dataset = dataset.batch(12)
 iterator = dataset.make_one_shot_iterator()
 
 print(iterator.get_next())
