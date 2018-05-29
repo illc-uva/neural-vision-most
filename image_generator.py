@@ -247,14 +247,14 @@ def make_image(file_name, dots, num_pixels=256):
     fig.savefig(file_name, facecolor='grey', pad_inches=0)
 
 
-def make_batch(trial_types, color_dicts, num_per_dict):
+def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.'):
 
     for trial_type in trial_types:
         image_method = globals()[trial_type]
         for color_dict in color_dicts:
             for idx in range(num_per_dict):
-                make_image('{}_{}_{}.png'.format(
-                    trial_type,
+                make_image('{}/{}_{}_{}.png'.format(
+                    out_dir, trial_type,
                     '_'.join([str(key) + str(color_dict[key])
                               for key in color_dict]),
                     idx),
@@ -263,5 +263,5 @@ def make_batch(trial_types, color_dicts, num_per_dict):
 
 if __name__ == '__main__':
 
-    make_batch(['scattered_pairs'],
-               [{'y': 10, 'b': 9}, {'y': 9, 'b': 10}], 5)
+    make_batch(['scattered_pairs', 'scattered_random'],
+               [{'y': 10, 'b': 9}, {'y': 9, 'b': 10}], 5, 'images/test')

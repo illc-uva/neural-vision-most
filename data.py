@@ -20,14 +20,12 @@ Copyright (c) 2018 Shane Steinert-Threlkeld
 import glob
 import tensorflow as tf
 
-tf.enable_eager_execution()
+# tf.enable_eager_execution()
 
 
 def parse_file(filename, label):
-    print(filename)
     image_string = tf.read_file(filename)
     image = tf.image.decode_png(image_string, channels=3)
-    # label = label_from_filename(filename)
     return image, label
 
 
@@ -48,19 +46,22 @@ def label_from_filename(filename, colors=['y', 'b'],
     return eval_fn(colors_dict)
 
 
-def make_dataset(filename_pattern, shuffle=True):
+def make_dataset(filename_pattern,
+                 shuffle=True, batch_size=None, num_epochs=1):
     filenames = glob.glob(filename_pattern)
     labels = [label_from_filename(filename) for filename in filenames]
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
+    # get image tensors
     dataset = dataset.map(parse_file)
+    # shuffle
     if shuffle:
-        dataset = dataset.shuffle(len(labels))
+        dataset = dataset.shuffle(len(filenames))
+    # repeat for num epochs
+    dataset = dataset.repeat(num_epochs)
+    # batch
+    if batch_size:
+        dataset = dataset.batch(batch_size)
+    else:
+        # batch_size = None |--> one big batch
+        dataset = dataset.batch(len(filenames))
     return dataset
-
-
-# TODO: shuffle, etc
-dataset = make_dataset('*.png')
-dataset = dataset.batch(12)
-iterator = dataset.make_one_shot_iterator()
-
-print(iterator.get_next())
