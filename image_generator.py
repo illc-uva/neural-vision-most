@@ -251,13 +251,14 @@ def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.'):
 
     for trial_type in trial_types:
         image_method = globals()[trial_type]
-        for color_dict in color_dicts:
+        for dict_idx in range(len(color_dicts)):
+            color_dict = color_dicts[dict_idx]
             for idx in range(num_per_dict):
-                make_image('{}/{}_{}_{}.png'.format(
+                make_image('{}/{}_{}_{}_{}.png'.format(
                     out_dir, trial_type,
                     '_'.join([str(key) + str(color_dict[key])
                               for key in color_dict]),
-                    idx),
+                    idx, dict_idx),
                     image_method(color_dict))
 
 
@@ -283,6 +284,7 @@ if __name__ == '__main__':
     trial_types = ['scattered_random', 'scattered_pairs',
                    'column_pairs_mixed', 'column_pairs_sorted']
     color_dicts = dicts_from_ratios(ratios, imgs_per_ratio)
+    # TODO: refactor this to get proper # imgs per bin
 
     # make training set
     make_batch(trial_types, color_dicts, 5, 'images/train')
