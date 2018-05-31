@@ -73,12 +73,8 @@ def no_overlap(dots, x, y, radius):
         True if the new dot has no overlap with any of the dots in `dots',
         False otherwise
     """
-    can_add = True
-    for dot in dots:
-        if ((x - dot.x)**2 + (y - dot.y)**2 <
-                (radius + dot.radius)**2):
-            can_add = False
-    return can_add
+    return all([(x - dot.x)**2 + (y - dot.y)**2 >= (radius + dot.radius)**2
+                for dot in dots])
 
 
 def scattered_random(colors_dict, num_pixels=256, padding=16,
