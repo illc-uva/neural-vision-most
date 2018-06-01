@@ -19,9 +19,59 @@ Copyright (c) 2018 Shane Steinert-Threlkeld
 import tensorflow as tf
 
 
+def ffnn_model_fn(features, labels, mode, params):
+
+    # -- features: [batch_size, width, height, channels]
+    # -- images: [batch_size, width*height*channels]
+    # input_layer reshapes behind the scenes
+    images = tf.feature_column.input_layer(features, params['feature_columns'])
+
+    net = images
+    training = mode == tf.estimator.ModeKeys.TRAIN
+    for layer in params['layers']:
+        net = tf.layers.dense(net,
+                              units=layer['units'],
+                              activation=layer['activation'])
+        if layer['dropout']:
+            net = tf.layers.dropout(net,
+                                    rate=layer['dropout'],
+                                    training=training)
+    # -- net: [batch_size, params['layers'][-1]['units']]
+
+    # -- logits: [batch_size, num_classes]
+    logits = tf.layers.dense(net, units=params['num_classes'], activation=None)
+
+    # prediction
+    # -- predicted_classes: [batch_size]
+    predicted_classes = tf.argmax(logits, axis=1)
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {
+            'class_ids': predicted_classes[:, tf.newaxis],
+            'probabilities': tf.nn.softmax(logits),
+            'logits': logits,
+        }
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+
+    # loss and training
+    loss = tf.losses.sparse_softmax_cross_entropy(labels, logits)
+    # TODO: parameterize optimizer?
+    optimizer = tf.train.RMSPropOptimizer(0.001)
+    train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+
+    accuracy = tf.metrics.accuracy(labels=labels,
+                                   predictions=predicted_classes)
+    metrics = {'total_accuracy': accuracy}
+    return tf.estimator.EstimatorSpec(mode,
+                                      loss=loss,
+                                      train_op=train_op,
+                                      eval_metric_ops=metrics)
+
+
+
 def cnn_model_fn(features, labels, mode, params):
 
-    input_layer = features[params['input_feature_name']]
+    images = tf.feature_column.input_layer(features, params['feature_columns'])
+    net = images
 
     # TODO: Lewis will implement CNN here
 
@@ -30,6 +80,7 @@ def cnn_model_fn(features, labels, mode, params):
 
 def ram_model_fn(features, labels, mode, params):
 
-    input_layer = features[params['input_feature_name']]
+    images = tf.feature_column.input_layer(features, params['feature_columns'])
+    net = images
 
     return

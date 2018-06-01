@@ -23,10 +23,10 @@ import tensorflow as tf
 # tf.enable_eager_execution()
 
 
-def parse_file(filename, label):
+def parse_file(filename, label, key):
     image_string = tf.read_file(filename)
     image = tf.image.decode_png(image_string, channels=3)
-    return image, label
+    return {key: image}, label
 
 
 def most(colors_dict, main_color):
@@ -46,13 +46,14 @@ def label_from_filename(filename, colors=['y', 'b'],
     return eval_fn(colors_dict)
 
 
-def make_dataset(filename_pattern,
+def make_dataset(filename_pattern, img_feature_name,
                  shuffle=True, batch_size=None, num_epochs=1):
     filenames = glob.glob(filename_pattern)
     labels = [label_from_filename(filename) for filename in filenames]
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     # get image tensors
-    dataset = dataset.map(parse_file)
+    dataset = dataset.map(lambda filename, label: parse_file(
+        filename, label, img_feature_name))
     # shuffle
     if shuffle:
         dataset = dataset.shuffle(len(filenames))
