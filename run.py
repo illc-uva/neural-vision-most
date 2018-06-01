@@ -39,7 +39,8 @@ def make_input_fn(filename_pattern,
 def run():
 
     def train_input_fn():
-        return make_input_fn('images/train/*.png', batch_size=batch_size)
+        return make_input_fn('images/train/*.png', batch_size=batch_size,
+                             num_epochs=3)
 
     def test_input_fn():
         return make_input_fn('images/test/*.png', shuffle=False)
@@ -47,11 +48,17 @@ def run():
     img_feature_columns = [tf.feature_column.numeric_column(
         img_feature_column_name, shape=[img_size, img_size, 3])]
 
+    ffnn_runconfig = tf.estimator.RunConfig(
+        save_checkpoints_secs=60,
+        keep_checkpoint_max=3
+    )
     model = tf.estimator.DNNClassifier(
         feature_columns=img_feature_columns,
         hidden_units=[256, 256],
         activation_fn=tf.nn.elu,
-        n_classes=num_classes)
+        n_classes=num_classes,
+        model_dir='/tmp/test',
+        config=ffnn_runconfig)
 
     model.train(input_fn=train_input_fn)
     print(model.evaluate(input_fn=test_input_fn))
