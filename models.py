@@ -29,7 +29,7 @@ def cnn_model_fn(features, labels, mode, params):
     return
 
 
-def rmva_model_fn(features, labels, mode, params):
+def ram_model_fn(features, labels, mode, params):
 
     input_layer = features[params['input_feature_name']]
 
