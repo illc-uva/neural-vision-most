@@ -23,8 +23,7 @@ def cnn_model_fn(features, labels, mode, params):
 
     input_layer = features[params['input_feature_name']]
 
-    # NOTE: this is a simple ffnn for now, just to illustrate the pipeline
-    # should be converted to CNN
+    # TODO: Lewis will implement CNN here
 
     return
 
