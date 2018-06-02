@@ -67,10 +67,9 @@ def ffnn_model_fn(features, labels, mode, params):
                                       eval_metric_ops=metrics)
 
 
-
 def cnn_model_fn(features, labels, mode, params):
 
-    images = tf.feature_column.input_layer(features, params['feature_columns'])
+    images = features[params['feature_columns']]
     net = images
 
     # TODO: Lewis will implement CNN here
@@ -80,7 +79,7 @@ def cnn_model_fn(features, labels, mode, params):
 
 def ram_model_fn(features, labels, mode, params):
 
-    images = tf.feature_column.input_layer(features, params['feature_columns'])
+    images = features[params['feature_columns']]
     net = images
 
     return
