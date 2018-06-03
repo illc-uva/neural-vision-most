@@ -69,7 +69,7 @@ def ffnn_model_fn(features, labels, mode, params):
 
 def cnn_model_fn(features, labels, mode, params):
 
-    images = features[params['feature_columns']]
+    images = features[params['img_feature_name']]
     net = images
 
     # TODO: Lewis will implement CNN here
@@ -79,7 +79,7 @@ def cnn_model_fn(features, labels, mode, params):
 
 def ram_model_fn(features, labels, mode, params):
 
-    images = features[params['feature_columns']]
+    images = features[params['img_feature_name']]
     net = images
 
     return
