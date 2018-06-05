@@ -201,8 +201,8 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         glimpses = self.glimpse_net(self.images, locs)
 
         # finished iff have taken the right number of glimpses
-        done = time == self.num_glimpses - 1
-        finished = tf.cast([done]*self.batch_size, tf.bool)
+        done = (time + 1 >= self.num_glimpses)
+        finished = tf.reduce_all(done)
 
         return outputs, new_state, glimpses, finished
 
@@ -223,11 +223,13 @@ def ram_model_fn(features, labels, mode, params):
     core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
                                       images, params['num_glimpses'])
 
+    # -- outputs: [batch_size, num_glimpses, core_size]
     outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(
         core_decoder, scope='decoder')
 
     # classification
-    last_outputs = outputs[-1]
+    last_outputs = outputs[:, -1, :]
+    last_outputs = tf.Print(last_outputs, [last_outputs[0], tf.shape(last_outputs)])
     with tf.variable_scope('action_network'):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
 
@@ -248,8 +250,9 @@ def ram_model_fn(features, labels, mode, params):
         core_net_vars = [var for var in variables if var not in loc_net_vars]
 
         # classification loss
-        class_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=labels, logits=logits)
+        class_loss = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels,
+                                                           logits=logits))
         # TODO: hybrid loss for core as well?
         core_gradients = tf.gradients(class_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
