@@ -153,10 +153,13 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         self.loc_net = location_network
         self.rnn_cell = rnn_cell
         self.images = images
-        self.batch_size = tf.shape(images)[0]
         self.num_glimpses = num_glimpses
         self.locs = []
         self.loc_means = []
+
+    @property
+    def batch_size(self):
+        return tf.shape(self.images)[0]
 
     def initialize(self):
         # TODO: context network for initial locs?
@@ -167,7 +170,7 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         self.locs.append(init_locs)
         # -- init_glimpse: [batch_size, glimpse_out_size]
         init_glimpses = self.glimpse_net(self.images, init_locs)
-        finished = [False]*self.batch_size
+        finished = [0]*self.batch_size
         # -- init_state: [batch_size, rnn_cell_size]
         init_state = self.rnn_cell.zero_state(self.batch_size)
         return finished, init_glimpses, init_state
@@ -183,7 +186,7 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         glimpses = self.glimpse_net(self.images, locs)
 
         # finished iff have taken the right number of glimpses
-        done = time == self.num_glimpses - 1
+        done = int(time == self.num_glimpses - 1)
         finished = [done]*self.batch_size
 
         return outputs, new_state, glimpses, finished
@@ -223,3 +226,31 @@ def ram_model_fn(features, labels, mode, params):
             'locs': core_decoder.locs
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
+
+    # training
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        variables = tf.trainable_variables()
+        loc_net_vars = [var for var in variables if 'location_network' in
+                        var.name]
+        core_net_vars = [var for var in variables if var not in loc_net_vars]
+
+        # classification loss
+        class_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=labels, logits=logits)
+        # TODO: hybrid loss for core as well?
+        core_gradients = tf.gradients(class_loss, core_net_vars)
+        core_gradients, _ = tf.clip_by_global_norm(core_gradients,
+                                                   params['max_grad_norm'])
+
+        # TODO: reinforce loss for location
+
+        # TODO: parameterize optimizer
+        optimizer = tf.train.AdamOptimizer()
+        grads_and_vars = []
+        grads_and_vars.extend(zip(core_gradients, core_net_vars))
+        train_op = optimizer.apply_gradients(
+            grads_and_vars,
+            global_step=tf.train.get_global_step())
+
+        return tf.estimator.EstimatorSpec(mode, loss=class_loss,
+                                          train_op=train_op)

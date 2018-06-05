@@ -63,7 +63,8 @@ def run():
             'loc_dim': 2,  # x, y
             'core_size': 128,
             'num_glimpses': 8,
-            'num_classes': 2
+            'num_classes': 2,
+            'max_grad_norm': 5.0
         })
     model.train(input_fn=train_input_fn)
     print(list(model.predict(input_fn=test_input_fn)))
