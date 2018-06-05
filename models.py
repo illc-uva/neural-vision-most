@@ -159,8 +159,7 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         self.rnn_cell = rnn_cell
         self.images = images
         self.num_glimpses = num_glimpses
-        self.locs = []
-        self.loc_means = []
+        self.loc_means = tf.constant(0.0, shape=[1, self.loc_net.loc_dim])
 
     @property
     def batch_size(self):
@@ -180,7 +179,7 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         init_locs = tf.random_uniform(
             [self.batch_size, self.loc_net.loc_dim],
             minval=-1., maxval=1.)
-        self.locs.append(init_locs)
+        self.locs = init_locs
         # -- init_glimpse: [batch_size, glimpse_out_size]
         init_glimpses = self.glimpse_net(self.images, init_locs)
         finished = tf.cast([False]*self.batch_size, tf.bool)
@@ -196,8 +195,8 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         # get next input (glimpses), based on previous rnn state
         c, h = state  # c = state, h = output; see state_is_tuple
         locs, loc_means = self.loc_net(c)
-        self.locs.append(locs)
-        self.loc_means.append(loc_means)
+        self.locs = tf.concat([self.locs, locs], 0)
+        # self.loc_means.append(loc_means)
         glimpses = self.glimpse_net(self.images, locs)
 
         # finished iff have taken the right number of glimpses
@@ -210,6 +209,7 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
 def ram_model_fn(features, labels, mode, params):
 
     images = features[params['img_feature_name']]
+    batch_size = tf.shape(images)[0]
 
     glimpse_net = GlimpseNetwork(params['img_size'], params['patch_size'],
                                  params['g_size'], params['l_size'],
@@ -220,16 +220,34 @@ def ram_model_fn(features, labels, mode, params):
 
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+    locs, loc_means, outputs = [], [], []
+    init_locs = tf.random_uniform(
+        [batch_size, params['loc_dim']],
+        minval=-1., maxval=1.)
+    locs.append(init_locs)
+    glimpses = glimpse_net(images, init_locs)
+    state = rnn_cell.zero_state(batch_size, tf.float32)
+    for _ in range(params['num_glimpses']):
+        output, state = rnn_cell(glimpses, state)
+        outputs.append(output)
+        c, h = state  # c = state, h = output; see state_is_tuple
+        cur_locs, cur_loc_means = location_net(c)
+        locs.append(cur_locs)
+        loc_means.append(cur_loc_means)
+        glimpses = glimpse_net(images, cur_locs)
+
+    """
     core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
                                       images, params['num_glimpses'])
-
     # -- outputs: [batch_size, num_glimpses, core_size]
     outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(
         core_decoder, scope='decoder')
+    """
 
     # classification
-    last_outputs = outputs[:, -1, :]
-    last_outputs = tf.Print(last_outputs, [last_outputs[0], tf.shape(last_outputs)])
+    # -- last_outputs: [batch_size, core_size]
+    last_outputs = outputs[-1]
+    last_outputs = tf.Print(last_outputs, [last_outputs[0]], summarize=64)
     with tf.variable_scope('action_network'):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
 
@@ -238,7 +256,7 @@ def ram_model_fn(features, labels, mode, params):
         # collect outputs here
         outputs = {
             'logits': logits,
-            'locs': core_decoder.locs
+            'locs': tf.concat(locs, 1)
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
