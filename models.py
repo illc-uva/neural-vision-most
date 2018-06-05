@@ -110,16 +110,15 @@ class GlimpseNetwork(object):
 
     def __call__(self, images, locs):
 
-        with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
-            # -- patches: [batch_size, patch_size, patch_size, 3]
-            patches = self.retina(images, locs)
-            patches = tf.reshape(patches,
-                                 [tf.shape(patches)[0],
-                                  self.patch_size**2*3])
+        # -- patches: [batch_size, patch_size, patch_size, 3]
+        patches = self.retina(images, locs)
+        patches = tf.reshape(patches,
+                             [tf.shape(patches)[0],
+                              self.patch_size**2*3])
 
-            # TODO: Lewis implements Glimpse Network here
+        # TODO: Lewis implements Glimpse Network here
 
-            return tf.layers.dense(patches, self.out_size)
+        return tf.layers.dense(patches, self.out_size)
 
 
 class LocationNetwork(object):
@@ -131,23 +130,22 @@ class LocationNetwork(object):
 
     def __call__(self, rnn_output):
 
-        with tf.variable_scope('location_network', reuse=tf.AUTO_REUSE):
-            # TODO: Lewis implements Location Network here
-            # tanh to force [-1, 1] values
-            means = tf.layers.dense(rnn_output, self.loc_dim,
-                                    activation=tf.tanh)
+        # TODO: Lewis implements Location Network here
+        # tanh to force [-1, 1] values
+        means = tf.layers.dense(rnn_output, self.loc_dim,
+                                activation=tf.tanh)
 
-            if self.sampling:
-                # clip to force [-1, 1] values
-                locs = tf.clip_by_value(
-                    means + tf.random_normal(
-                        [tf.shape(rnn_output)[0], self.loc_dim],
-                        stddev=self.std),
-                    -1., 1.)
-            else:
-                locs = means
+        if self.sampling:
+            # clip to force [-1, 1] values
+            locs = tf.clip_by_value(
+                means + tf.random_normal(
+                    [tf.shape(rnn_output)[0], self.loc_dim],
+                    stddev=self.std),
+                -1., 1.)
+        else:
+            locs = means
 
-            return locs, means
+        return locs, means
 
 
 class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
@@ -204,6 +202,14 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         finished = tf.reduce_all(done)
 
         return outputs, new_state, glimpses, finished
+    """
+    core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
+                                      images, params['num_glimpses'])
+    # -- outputs: [batch_size, num_glimpses, core_size]
+    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(
+        core_decoder, scope='decoder')
+    last_outputs = outputs[:, -1, :]
+    """
 
 
 def ram_model_fn(features, labels, mode, params):
@@ -218,6 +224,12 @@ def ram_model_fn(features, labels, mode, params):
     is_training = mode == tf.estimator.ModeKeys.TRAIN
     location_net = LocationNetwork(params['loc_dim'], sampling=is_training)
 
+    # TODO: convert the for loop below into tf.while_loop?
+    # I had been using tf.contrib.seq2seq.dynamic_decode, but because of how it
+    # hides the tf.while_loop, it makes it hard to extract information that's
+    # computed during the while_loop, e.g. the sampled locations
+    # See the code commented out below GlimpseDecoder above for how to use it
+
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
     locs, loc_means, outputs = [], [], []
@@ -225,28 +237,49 @@ def ram_model_fn(features, labels, mode, params):
         [batch_size, params['loc_dim']],
         minval=-1., maxval=1.)
     locs.append(init_locs)
-    glimpses = glimpse_net(images, init_locs)
-    state = rnn_cell.zero_state(batch_size, tf.float32)
+
+    with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
+        glimpses = glimpse_net(images, init_locs)
+    with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
+        state = rnn_cell.zero_state(batch_size, tf.float32)
+
+    def cond(t, *args):
+        return tf.less(t, params['num_glimpses'])
+
+    def body(t, glimpses, state):
+        with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
+            output, new_state = rnn_cell(glimpses, state)
+        c, h = new_state
+        with tf.variable_scope('location_network', reuse=tf.AUTO_REUSE):
+            cur_locs, cur_loc_means = location_net(h)
+        with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
+            new_glimpse = glimpse_net(images, cur_locs)
+        return t+1, new_glimpse, new_state
+
+    time = tf.constant(0.0)
+    times, glimpses, state = tf.while_loop(
+        cond,
+        body,
+        [time, glimpses, state])
+    print(state)
+
+    """
     for _ in range(params['num_glimpses']):
-        output, state = rnn_cell(glimpses, state)
+        with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
+            output, state = rnn_cell(glimpses, state)
         outputs.append(output)
         c, h = state  # c = state, h = output; see state_is_tuple
-        cur_locs, cur_loc_means = location_net(c)
+        with tf.variable_scope('location_network', reuse=tf.AUTO_REUSE):
+            cur_locs, cur_loc_means = location_net(h)
         locs.append(cur_locs)
         loc_means.append(cur_loc_means)
-        glimpses = glimpse_net(images, cur_locs)
-
+        with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
+            glimpses = glimpse_net(images, cur_locs)
     """
-    core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
-                                      images, params['num_glimpses'])
-    # -- outputs: [batch_size, num_glimpses, core_size]
-    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(
-        core_decoder, scope='decoder')
-    """
-
     # classification
     # -- last_outputs: [batch_size, core_size]
-    last_outputs = outputs[-1]
+    last_states, last_outputs = state.c, state.h
+    # last_outputs = outputs[-1]
     last_outputs = tf.Print(last_outputs, [last_outputs[0]], summarize=64)
     with tf.variable_scope('action_network'):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
