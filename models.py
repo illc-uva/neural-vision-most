@@ -146,14 +146,46 @@ class LocationNetwork(object):
 
 class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
 
-    def __init__(self, glimpse_network, location_network, rnn_cell, params):
-        return
+    def __init__(self, glimpse_network, location_network, rnn_cell, images,
+                 num_glimpses):
+        self.glimpse_net = glimpse_network
+        self.loc_net = location_network
+        self.rnn_cell = rnn_cell
+        self.images = images
+        self.batch_size = tf.shape(images)[0]
+        self.num_glimpses = num_glimpses
+        self.locs = []
+        self.loc_means = []
 
     def initialize(self):
-        return
+        # TODO: context network for initial locs?
+        # a la Multiple Object Recognition paper
+        init_locs = tf.random_uniform(
+            [self.batch_size, self.loc_net.loc_dim],
+            minval=-1., maxval=1.)
+        self.locs.append(init_locs)
+        # -- init_glimpse: [batch_size, glimpse_out_size]
+        init_glimpses = self.glimpse_net(self.images, init_locs)
+        finished = [False]*self.batch_size
+        # -- init_state: [batch_size, rnn_cell_size]
+        init_state = self.rnn_cell.zero_state(self.batch_size)
+        return finished, init_glimpses, init_state
 
     def step(self, time, inputs, state):
-        return
+        # run rnn_cell
+        outputs, new_state = self.rnn_cell(inputs, state)
+
+        # get next input (glimpses), based on previous rnn state
+        locs, loc_means = self.loc_net(state)
+        self.locs.append(locs)
+        self.loc_means.append(loc_means)
+        glimpses = self.glimpse_net(self.images, locs)
+
+        # finished iff have taken the right number of glimpses
+        done = time == self.num_glimpses - 1
+        finished = [done]*self.batch_size
+
+        return outputs, new_state, glimpses, finished
 
 
 def ram_model_fn(features, labels, mode, params):
@@ -169,5 +201,11 @@ def ram_model_fn(features, labels, mode, params):
     is_training = mode == tf.estimator.ModeKeys.TRAIN
     with tf.variable_scope('location_network'):
         location_net = LocationNetwork(params['loc_dim'], sampling=is_training)
+
+    with tf.variable_scope('core_network'):
+        # TODO: parameterize rnn_cell, i.e. implement split cell from paper
+        rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+        core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
+                                      images)
 
     return
