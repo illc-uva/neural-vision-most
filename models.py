@@ -232,36 +232,41 @@ def ram_model_fn(features, labels, mode, params):
 
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
-    locs, loc_means, outputs = [], [], []
-    init_locs = tf.random_uniform(
+
+    # locs, loc_means, outputs = [], [], []
+    # -- locs: [None, loc_dim]
+    locs = tf.random_uniform(
         [batch_size, params['loc_dim']],
         minval=-1., maxval=1.)
-    locs.append(init_locs)
+    # -- loc_means: [None, loc_dim]
+    loc_means = tf.zeros([batch_size, params['loc_dim']])
 
     with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
-        glimpses = glimpse_net(images, init_locs)
+        glimpses = glimpse_net(images, locs)
     with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
         state = rnn_cell.zero_state(batch_size, tf.float32)
 
     def cond(t, *args):
         return tf.less(t, params['num_glimpses'])
 
-    def body(t, glimpses, state):
+    def body(t, glimpses, state, locs, loc_means):
         with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
             output, new_state = rnn_cell(glimpses, state)
         c, h = new_state
         with tf.variable_scope('location_network', reuse=tf.AUTO_REUSE):
             cur_locs, cur_loc_means = location_net(h)
+            # store new values
+            locs = tf.concat([locs, cur_locs], axis=0)
+            loc_means = tf.concat([loc_means, cur_loc_means], axis=0)
         with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
             new_glimpse = glimpse_net(images, cur_locs)
-        return t+1, new_glimpse, new_state
+        return t+1, new_glimpse, new_state, locs, loc_means
 
     time = tf.constant(0.0)
-    times, glimpses, state = tf.while_loop(
+    times, glimpses, state, locs, loc_means = tf.while_loop(
         cond,
         body,
-        [time, glimpses, state])
-    print(state)
+        [time, glimpses, state, locs, loc_means])
 
     """
     for _ in range(params['num_glimpses']):
@@ -287,9 +292,11 @@ def ram_model_fn(features, labels, mode, params):
     # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
         # collect outputs here
+        loc_shape = [batch_size, params['loc_dim']*(1+params['num_glimpses'])]
         outputs = {
             'logits': logits,
-            'locs': tf.concat(locs, 1)
+            'locs': tf.reshape(locs, loc_shape),
+            'loc_means': tf.reshape(loc_means, loc_shape),
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
