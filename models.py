@@ -103,19 +103,23 @@ class GlimpseNetwork(object):
 
     def __init__(self, img_size, patch_size, g_size, l_size, out_size):
         self.retina = Retina(img_size, patch_size)
+        self.patch_size = patch_size
         self.g_size = g_size
         self.l_size = l_size
         self.out_size = out_size
 
     def __call__(self, images, locs):
 
-        # -- patches: [batch_size, patch_size, patch_size, 3]
-        patches = self.retina(images, locs)
+        with tf.variable_scope('glimpse_network', reuse=tf.AUTO_REUSE):
+            # -- patches: [batch_size, patch_size, patch_size, 3]
+            patches = self.retina(images, locs)
+            patches = tf.reshape(patches,
+                                 [tf.shape(patches)[0],
+                                  self.patch_size**2*3])
 
-        # TODO: Lewis implements Glimpse Network here
+            # TODO: Lewis implements Glimpse Network here
 
-        return tf.Variable(tf.zeros([tf.shape(images)[0], self.out_size]),
-                           name="dummy_glimpse")
+            return tf.layers.dense(patches, self.out_size)
 
 
 class LocationNetwork(object):
@@ -127,22 +131,23 @@ class LocationNetwork(object):
 
     def __call__(self, rnn_output):
 
-        # TODO: Lewis implements Location Network here
-        # tanh to force [-1, 1] values
-        means = tf.tanh(
-            tf.Variable(tf.zeros([tf.shape(rnn_output)[0], self.loc_dim]),
-                        name="dummy_loc_mean"))
-
-        if self.sampling:
+        with tf.variable_scope('location_network', reuse=tf.AUTO_REUSE):
+            # TODO: Lewis implements Location Network here
             # tanh to force [-1, 1] values
-            locs = tf.tanh(
-                means + tf.random_normal(
-                    [tf.shape(rnn_output)[0], self.loc_dim],
-                    std=self.std))
-        else:
-            locs = means
+            means = tf.layers.dense(rnn_output, self.loc_dim,
+                                    activation=tf.tanh)
 
-        return locs, means
+            if self.sampling:
+                # clip to force [-1, 1] values
+                locs = tf.clip_by_value(
+                    means + tf.random_normal(
+                        [tf.shape(rnn_output)[0], self.loc_dim],
+                        stddev=self.std),
+                    -1., 1.)
+            else:
+                locs = means
+
+            return locs, means
 
 
 class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
@@ -161,6 +166,14 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
     def batch_size(self):
         return tf.shape(self.images)[0]
 
+    @property
+    def output_size(self):
+        return self.rnn_cell.output_size
+
+    @property
+    def output_dtype(self):
+        return tf.float32
+
     def initialize(self):
         # TODO: context network for initial locs?
         # a la Multiple Object Recognition paper
@@ -170,24 +183,26 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
         self.locs.append(init_locs)
         # -- init_glimpse: [batch_size, glimpse_out_size]
         init_glimpses = self.glimpse_net(self.images, init_locs)
-        finished = [0]*self.batch_size
+        finished = tf.cast([False]*self.batch_size, tf.bool)
         # -- init_state: [batch_size, rnn_cell_size]
-        init_state = self.rnn_cell.zero_state(self.batch_size)
+        init_state = self.rnn_cell.zero_state(self.batch_size, tf.float32)
         return finished, init_glimpses, init_state
 
     def step(self, time, inputs, state):
         # run rnn_cell
-        outputs, new_state = self.rnn_cell(inputs, state)
+        with tf.variable_scope('core_network'):
+            outputs, new_state = self.rnn_cell(inputs, state)
 
         # get next input (glimpses), based on previous rnn state
-        locs, loc_means = self.loc_net(state)
+        c, h = state  # c = state, h = output; see state_is_tuple
+        locs, loc_means = self.loc_net(c)
         self.locs.append(locs)
         self.loc_means.append(loc_means)
         glimpses = self.glimpse_net(self.images, locs)
 
         # finished iff have taken the right number of glimpses
-        done = int(time == self.num_glimpses - 1)
-        finished = [done]*self.batch_size
+        done = time == self.num_glimpses - 1
+        finished = tf.cast([done]*self.batch_size, tf.bool)
 
         return outputs, new_state, glimpses, finished
 
@@ -196,22 +211,20 @@ def ram_model_fn(features, labels, mode, params):
 
     images = features[params['img_feature_name']]
 
-    with tf.variable_scope('glimpse_network'):
-        glimpse_net = GlimpseNetwork(params['img_size'], params['patch_size'],
-                                     params['g_size'], params['l_size'],
-                                     params['glimpse_out_size'])
+    glimpse_net = GlimpseNetwork(params['img_size'], params['patch_size'],
+                                 params['g_size'], params['l_size'],
+                                 params['glimpse_out_size'])
 
     is_training = mode == tf.estimator.ModeKeys.TRAIN
-    with tf.variable_scope('location_network'):
-        location_net = LocationNetwork(params['loc_dim'], sampling=is_training)
+    location_net = LocationNetwork(params['loc_dim'], sampling=is_training)
 
-    with tf.variable_scope('core_network'):
-        # TODO: parameterize rnn_cell, i.e. implement split cell from paper
-        rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
-        core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
+    # TODO: parameterize rnn_cell, i.e. implement split cell from paper
+    rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+    core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
                                       images, params['num_glimpses'])
 
-    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(core_decoder)
+    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(
+        core_decoder, scope='decoder')
 
     # classification
     last_outputs = outputs[-1]
