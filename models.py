@@ -206,7 +206,7 @@ def ram_model_fn(features, labels, mode, params):
         # TODO: parameterize rnn_cell, i.e. implement split cell from paper
         rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
         core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
-                                      images)
+                                      images, params['num_glimpses'])
 
     outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(core_decoder)
 
@@ -215,6 +215,7 @@ def ram_model_fn(features, labels, mode, params):
     with tf.variable_scope('action_network'):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
 
+    # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
         # collect outputs here
         outputs = {
