@@ -69,6 +69,7 @@ def run():
     print('model built, onto training....')
     model.train(input_fn=train_input_fn)
     print(list(model.predict(input_fn=test_input_fn)))
+    print(model.evaluate(input_fn=test_input_fn))
 
     """
     img_feature_columns = [tf.feature_column.numeric_column(

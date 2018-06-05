@@ -191,8 +191,9 @@ def ram_model_fn(features, labels, mode, params):
     # classification
     # -- last_outputs: [batch_size, core_size]
     _, last_outputs = state
-    with tf.variable_scope('action_network'):
+    with tf.variable_scope('action_network', reuse=tf.AUTO_REUSE):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
+        predicted_classes = tf.argmax(logits, axis=1)
 
     # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -200,28 +201,42 @@ def ram_model_fn(features, labels, mode, params):
         loc_shape = [batch_size, params['loc_dim']*(1+params['num_glimpses'])]
         outputs = {
             'logits': logits,
+            'classes': predicted_classes,
             'locs': tf.reshape(locs, loc_shape),
             'loc_means': tf.reshape(loc_means, loc_shape),
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
-    # training
+    # losses
+    with tf.variable_scope('losses'):
+        # classification loss
+        class_loss = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=labels, logits=logits))
+        # TODO: reinforce loss for location
+
+    # evaluation mode
+    if mode == tf.estimator.ModeKeys.EVAL:
+        # TODO: evaluate!
+        accuracy = tf.metrics.accuracy(labels=labels,
+                                       predictions=predicted_classes)
+        metrics = {'accuracy': accuracy}
+        return tf.estimator.EstimatorSpec(mode, loss=class_loss,
+                                          eval_metric_ops=metrics)
+
+    # training mode
     if mode == tf.estimator.ModeKeys.TRAIN:
         variables = tf.trainable_variables()
         loc_net_vars = [var for var in variables if 'location_network' in
                         var.name]
+        print(loc_net_vars)
         core_net_vars = [var for var in variables if var not in loc_net_vars]
-
-        # classification loss
-        class_loss = tf.reduce_mean(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels,
-                                                           logits=logits))
+        print(core_net_vars)
         # TODO: hybrid loss for core as well?
         core_gradients = tf.gradients(class_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
                                                    params['max_grad_norm'])
 
-        # TODO: reinforce loss for location
 
         # TODO: parameterize optimizer
         optimizer = tf.train.AdamOptimizer()
@@ -233,7 +248,3 @@ def ram_model_fn(features, labels, mode, params):
 
         return tf.estimator.EstimatorSpec(mode, loss=class_loss,
                                           train_op=train_op)
-
-    if mode == tf.estimator.ModeKeys.EVAL:
-        # TODO: evaluate!
-        return
