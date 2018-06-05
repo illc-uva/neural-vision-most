@@ -80,6 +80,7 @@ def cnn_model_fn(features, labels, mode, params):
 ################################################################
 # Recurrent Attention Model
 # From Mnih et al 2014, Recurrent Models of Visual Attention
+# TODO: document!
 ################################################################
 
 
@@ -191,7 +192,6 @@ class GlimpseDecoder(tf.contrib.seq2seq.Decoder):
 def ram_model_fn(features, labels, mode, params):
 
     images = features[params['img_feature_name']]
-    net = images
 
     with tf.variable_scope('glimpse_network'):
         glimpse_net = GlimpseNetwork(params['img_size'], params['patch_size'],
@@ -208,4 +208,17 @@ def ram_model_fn(features, labels, mode, params):
         core_decoder = GlimpseDecoder(glimpse_net, location_net, rnn_cell,
                                       images)
 
-    return
+    outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(core_decoder)
+
+    # classification
+    last_outputs = outputs[-1]
+    with tf.variable_scope('action_network'):
+        logits = tf.layers.dense(last_outputs, params['num_classes'])
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        # collect outputs here
+        outputs = {
+            'logits': logits,
+            'locs': core_decoder.locs
+        }
+        return tf.estimator.EstimatorSpec(mode, predictions=outputs)
