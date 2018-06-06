@@ -148,7 +148,7 @@ def ram_model_fn(features, labels, mode, params):
         minval=-1., maxval=1.)
     # -- loc_means: [None, loc_dim]
     loc_means = tf.zeros([batch_size, params['loc_dim']])
-    glimpses = glimpse_network(images, locs)
+    glimpse = glimpse_network(images, locs)
     state = rnn_cell.zero_state(batch_size, tf.float32)
 
     # set up the main loop, for sampling locations and extracting glimpses
@@ -156,36 +156,58 @@ def ram_model_fn(features, labels, mode, params):
 
     # NOTE: the use of a tf.while_loop allows extracting information by passing
     # through and concatenating to a tensor at each iteration.
+    # Or, as I'm doing now, by writing to a TensorArray
     # I had been using tf.contrib.seq2seq.dynamic_decode, but because of how it
     # hides the tf.while_loop, it makes it hard to extract information that's
     # computed during the while_loop, e.g. the sampled locations
+    def initialize_ta(N, init_tensor):
+        ta = tf.TensorArray(tf.float32, N)
+        ta = ta.write(0, init_tensor)
+        return ta
+    locs_ta = initialize_ta(1+params['num_glimpses'], locs)
+    loc_means_ta = initialize_ta(1+params['num_glimpses'], loc_means)
+    outputs_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
 
     def cond(t, *args):
         return tf.less(t, params['num_glimpses'])
 
-    def body(t, glimpses, state, locs, loc_means):
+    def body(t, glimpse, state, outputs_ta, locs_ta, loc_means_ta):
         # run the core network
         with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
-            output, new_state = rnn_cell(glimpses, state)
-        c, h = new_state  # c = state, h = output
+            output, new_state = rnn_cell(glimpse, state)
+            outputs_ta = outputs_ta.write(t, output)
 
         # get new location
-        cur_locs, cur_loc_means = location_network(h, is_training)
+        cur_locs, cur_loc_means = location_network(output, is_training)
         # store new values
         # TODO: can this be done better with TensorArrays?
-        locs = tf.concat([locs, cur_locs], axis=0)
-        loc_means = tf.concat([loc_means, cur_loc_means], axis=0)
+        locs_ta = locs_ta.write(t+1, cur_locs)
+        loc_means_ta = loc_means_ta.write(t+1, cur_loc_means)
 
         # get next glimpse
         new_glimpse = glimpse_network(images, cur_locs)
-        return t+1, new_glimpse, new_state, locs, loc_means
+        return t+1, new_glimpse, new_state, outputs_ta, locs_ta, loc_means_ta
 
     # THE MAIN LOOP!
-    time = tf.constant(0.0)
-    time, glimpses, state, locs, loc_means = tf.while_loop(
-        cond,
-        body,
-        [time, glimpses, state, locs, loc_means])
+    time = tf.constant(0)
+    time, glimpse, state, outputs_ta, locs_ta, loc_means_ta = (
+        tf.while_loop(
+            cond,
+            body,
+            [time, glimpse, state, outputs_ta, locs_ta, loc_means_ta]))
+
+    def ta_to_batch_major(ta):
+        # turns a TensorArray of time_steps length with [batch_size, dim]
+        # entries at each step into a Tensor [batch_size, time_steps, dim]
+        tensor = ta.stack()
+        return tf.transpose(tensor, perm=[1, 0, 2])
+
+    # [batch_size, 1+num_glimpses, loc_dim]
+    locs = ta_to_batch_major(locs_ta)
+    # [batch_size, 1+num_glimpses, loc_dim]
+    loc_means = ta_to_batch_major(loc_means_ta)
+    # [batch_size, num_glimpses, core_size]
+    outputs = ta_to_batch_major(outputs_ta)
 
     # classification
     # -- last_outputs: [batch_size, core_size]
@@ -195,30 +217,14 @@ def ram_model_fn(features, labels, mode, params):
         predicted_classes = tf.argmax(logits, axis=1)
         predicted_classes = tf.cast(predicted_classes, tf.int32)
 
-    def reshape_time(tensor, time_steps):
-        """ tensor is [batch_size * time_steps, dimension], where it's
-        assumed that the first time_steps rows are from the same batch at
-        t0, then the batch at t1, et cetera.
-        This method reshapes it so that the output has shape
-        [batch_size, time_steps,  dimension]
-        where now each row contains t0, t1, ..., time_steps
-        for each batch element, each t_i having dimension elts """
-        # [batch_size, dimension*time_steps]
-        first_reshape = tf.concat(tf.split(tensor, time_steps, 0), 1)
-        return tf.reshape(first_reshape, [batch_size, time_steps, -1])
-
-    # -- reshaped: [batch_size, (1+num_glimpses), loc_dim]
-    reshaped_locs = reshape_time(locs, 1+params['num_glimpses'])
-    reshaped_loc_means = reshape_time(loc_means, 1+params['num_glimpses'])
-
     # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
         # collect outputs here
         outputs = {
             'logits': logits,
             'classes': predicted_classes,
-            'locs': reshaped_locs,
-            'loc_means': reshaped_loc_means,
+            'locs': locs,
+            'loc_means': loc_means,
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
@@ -232,8 +238,8 @@ def ram_model_fn(features, labels, mode, params):
         # reinforce loss for location
         # ignore first step, since that's a random loc choice
         # -- reshaped: [batch_size, num_glimpses, loc_dim]
-        reshaped_locs = reshaped_locs[:, 1:, :]
-        reshaped_loc_means = reshaped_loc_means[:, 1:, :]
+        locs = locs[:, 1:, :]
+        loc_means = loc_means[:, 1:, :]
 
         def log_likelihood(means, locs, std):
             dist = tf.distributions.Normal(means, params['std'])
@@ -244,18 +250,21 @@ def ram_model_fn(features, labels, mode, params):
             return logll
 
         # log_prob(x_t | s_1:t-1)
-        logll = log_likelihood(reshaped_loc_means, reshaped_locs,
+        logll = log_likelihood(loc_means, locs,
                                params['std'])
         # reward: 1 for correct class, 0 for incorrect
         reward = tf.to_float(tf.equal(predicted_classes, labels))
         # reward: [batch_size, 1]
         reward = tf.expand_dims(reward, 1)
         # reward: [batch_size, num_glimpses]
+        # NB: 1/0 at each time step is `cumulative' reward
         reward = tf.tile(reward, [1, params['num_glimpses']])
         # normalize reward
-        r_mean, r_std = tf.nn.moments(reward, axes=[0, 1])
-        reward = (reward - r_mean) / (r_std + 1e-10)
+        # r_mean, r_std = tf.nn.moments(reward, axes=[0, 1])
+        # reward = (reward - r_mean) / (r_std + 1e-10)
         # TODO: baseline for variance reduction
+        # NB: requires getting all rnn_outputs from while_loop, not just the
+        # final one
         adv = reward
         reinforce_loss = -tf.reduce_mean(logll * adv)
 
