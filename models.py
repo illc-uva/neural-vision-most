@@ -86,6 +86,7 @@ def ram_model_fn(features, labels, mode, params):
 
     images = features[params['img_feature_name']]
     batch_size = tf.shape(images)[0]
+    tf.summary.image('images', images, max_outputs=8)
 
     # define network components 
     # NOTE: no actual tf Variables are initialized yet!
@@ -114,7 +115,7 @@ def ram_model_fn(features, labels, mode, params):
 
     # location_network
     # TODO: make std a param, or learnable?
-    def location_network(rnn_output, sampling, std=0.2,
+    def location_network(rnn_output, sampling, std=params['std'],
                          scope='location_network'):
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
             # TODO: Lewis implements Location Network here
@@ -192,6 +193,7 @@ def ram_model_fn(features, labels, mode, params):
     with tf.variable_scope('action_network', reuse=tf.AUTO_REUSE):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
         predicted_classes = tf.argmax(logits, axis=1)
+        predicted_classes = tf.cast(predicted_classes, tf.int32)
 
     def reshape_time(tensor, time_steps):
         """ tensor is [batch_size * time_steps, dimension], where it's
@@ -203,10 +205,9 @@ def ram_model_fn(features, labels, mode, params):
         for each batch element """
         return tf.concat(tf.split(tensor, time_steps, 0), 1)
 
-    logits = tf.Print(logits, [locs], summarize=256)
-    logits = tf.Print(logits,
-                      [reshape_time(locs, 1+params['num_glimpses'])],
-                      summarize=256)
+    # -- reshaped: [batch_size, (1+num_glimpses)*loc_dim]
+    reshaped_locs = reshape_time(locs, 1+params['num_glimpses'])
+    reshaped_loc_means = reshape_time(loc_means, 1+params['num_glimpses'])
 
     # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -214,8 +215,8 @@ def ram_model_fn(features, labels, mode, params):
         outputs = {
             'logits': logits,
             'classes': predicted_classes,
-            'locs': reshape_time(locs, 1+params['num_glimpses']),
-            'loc_means': reshape_time(loc_means, 1+params['num_glimpses']),
+            'locs': reshaped_locs,
+            'loc_means': reshaped_loc_means,
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
@@ -225,7 +226,41 @@ def ram_model_fn(features, labels, mode, params):
         class_loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=labels, logits=logits))
-        # TODO: reinforce loss for location
+
+        # reinforce loss for location
+        # -- reshaped: [batch_size, 1+num_glimpses, loc_dim]
+        reshaped_locs = tf.reshape(reshaped_locs,
+                                   [batch_size, -1, params['loc_dim']])
+        reshaped_loc_means = tf.reshape(reshaped_loc_means,
+                                   [batch_size, -1, params['loc_dim']])
+        # ignore first step, since that's a random loc choice
+        # -- reshaped: [batch_size, num_glimpses, loc_dim]
+        reshaped_locs = reshaped_locs[:, 1:, :]
+        reshaped_loc_means = reshaped_loc_means[:, 1:, :]
+
+        def log_likelihood(means, locs, std):
+            dist = tf.distributions.Normal(means, params['std'])
+            # -- logll: [batch_size, num_glimpses, loc_dim]
+            logll = dist.log_prob(locs)
+            # -- logll: [batch_size, num_glimpses]
+            logll = tf.reduce_sum(logll, 2)
+            return logll
+
+        # log_prob(x_t | s_1:t-1)
+        logll = log_likelihood(reshaped_loc_means, reshaped_locs,
+                               params['std'])
+        # reward: 1 for correct class, 0 for incorrect
+        reward = tf.to_float(tf.equal(predicted_classes, labels))
+        # reward: [batch_size, 1]
+        reward = tf.expand_dims(reward, 1)
+        # reward: [batch_size, num_glimpses]
+        reward = tf.tile(reward, [1, params['num_glimpses']])
+        # normalize reward
+        r_mean, r_std = tf.nn.moments(reward, axes=[0, 1])
+        reward = (reward - r_mean) / (r_std + 1e-10)
+        # TODO: baseline for variance reduction
+        adv = reward
+        reinforce_loss = -tf.reduce_mean(logll * adv)
 
     # evaluation mode
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -245,12 +280,16 @@ def ram_model_fn(features, labels, mode, params):
         core_gradients = tf.gradients(class_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
                                                    params['max_grad_norm'])
+        loc_gradients = tf.gradients(reinforce_loss, loc_net_vars)
+        loc_gradients, _ = tf.clip_by_global_norm(loc_gradients,
+                                                  params['max_grad_norm'])
 
 
         # TODO: parameterize optimizer
         optimizer = tf.train.AdamOptimizer()
         grads_and_vars = []
         grads_and_vars.extend(zip(core_gradients, core_net_vars))
+        grads_and_vars.extend(zip(loc_gradients, loc_net_vars))
         train_op = optimizer.apply_gradients(
             grads_and_vars,
             global_step=tf.train.get_global_step())
