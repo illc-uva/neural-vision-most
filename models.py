@@ -170,7 +170,6 @@ def ram_model_fn(features, labels, mode, params):
 
         # get new location
         cur_locs, cur_loc_means = location_network(h, is_training)
-        cur_locs = tf.Print(cur_locs, [cur_locs, cur_loc_means])
         # store new values
         # TODO: can this be done better with TensorArrays?
         locs = tf.concat([locs, cur_locs], axis=0)
@@ -194,15 +193,29 @@ def ram_model_fn(features, labels, mode, params):
         logits = tf.layers.dense(last_outputs, params['num_classes'])
         predicted_classes = tf.argmax(logits, axis=1)
 
+    def reshape_time(tensor, time_steps):
+        """ tensor is [batch_size * time_steps, dimension], where it's
+        assumed that the first time_steps rows are from the same batch at
+        t0, then the batch at t1, et cetera.
+        This method reshapes it so that the output has shape
+        [batch_size, time_steps * dimension]
+        where now each row contains t0, t1, ..., time_steps
+        for each batch element """
+        return tf.concat(tf.split(tensor, time_steps, 0), 1)
+
+    logits = tf.Print(logits, [locs], summarize=256)
+    logits = tf.Print(logits,
+                      [reshape_time(locs, 1+params['num_glimpses'])],
+                      summarize=256)
+
     # `prediction` mode
     if mode == tf.estimator.ModeKeys.PREDICT:
         # collect outputs here
-        loc_shape = [batch_size, params['loc_dim']*(1+params['num_glimpses'])]
         outputs = {
             'logits': logits,
             'classes': predicted_classes,
-            'locs': tf.reshape(locs, loc_shape),
-            'loc_means': tf.reshape(loc_means, loc_shape),
+            'locs': reshape_time(locs, 1+params['num_glimpses']),
+            'loc_means': reshape_time(loc_means, 1+params['num_glimpses']),
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
