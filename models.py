@@ -111,6 +111,10 @@ def ram_model_fn(features, labels, mode, params):
 
             # TODO: Lewis implements Glimpse Network here, using also
             # params['g_size'] and params['l_size']
+            # NOTE: right now, locs not being used at all in computing output,
+            # as needed for full model and for real learning; right now, LSTM
+            # sees a processed patch, but no info about location the patch is
+            # from...
             return tf.layers.dense(patches, params['glimpse_out_size'])
 
     # location_network
