@@ -256,7 +256,12 @@ def ram_model_fn(features, labels, mode, params):
         # TODO: baseline for variance reduction
         # NB: requires getting all rnn_outputs from while_loop, not just the
         # final one
-        adv = reward
+        with tf.variable_scope('baseline', reuse=tf.AUTO_REUSE):
+            # [batch_size, num_glimpses, 1]
+            baselines = tf.layers.dense(outputs, 1)
+            # [batch_size, num_glimpses]
+            baselines = tf.squeeze(baselines)
+        adv = reward - tf.stop_gradient(baselines)
         reinforce_loss = -tf.reduce_mean(logll * adv)
 
     # evaluation mode
