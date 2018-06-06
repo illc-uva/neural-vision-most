@@ -200,12 +200,14 @@ def ram_model_fn(features, labels, mode, params):
         assumed that the first time_steps rows are from the same batch at
         t0, then the batch at t1, et cetera.
         This method reshapes it so that the output has shape
-        [batch_size, time_steps * dimension]
+        [batch_size, time_steps,  dimension]
         where now each row contains t0, t1, ..., time_steps
-        for each batch element """
-        return tf.concat(tf.split(tensor, time_steps, 0), 1)
+        for each batch element, each t_i having dimension elts """
+        # [batch_size, dimension*time_steps]
+        first_reshape = tf.concat(tf.split(tensor, time_steps, 0), 1)
+        return tf.reshape(first_reshape, [batch_size, time_steps, -1])
 
-    # -- reshaped: [batch_size, (1+num_glimpses)*loc_dim]
+    # -- reshaped: [batch_size, (1+num_glimpses), loc_dim]
     reshaped_locs = reshape_time(locs, 1+params['num_glimpses'])
     reshaped_loc_means = reshape_time(loc_means, 1+params['num_glimpses'])
 
@@ -228,11 +230,6 @@ def ram_model_fn(features, labels, mode, params):
                 labels=labels, logits=logits))
 
         # reinforce loss for location
-        # -- reshaped: [batch_size, 1+num_glimpses, loc_dim]
-        reshaped_locs = tf.reshape(reshaped_locs,
-                                   [batch_size, -1, params['loc_dim']])
-        reshaped_loc_means = tf.reshape(reshaped_loc_means,
-                                   [batch_size, -1, params['loc_dim']])
         # ignore first step, since that's a random loc choice
         # -- reshaped: [batch_size, num_glimpses, loc_dim]
         reshaped_locs = reshaped_locs[:, 1:, :]
