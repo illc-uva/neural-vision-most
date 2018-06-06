@@ -158,7 +158,6 @@ def ram_model_fn(features, labels, mode, params):
     # I had been using tf.contrib.seq2seq.dynamic_decode, but because of how it
     # hides the tf.while_loop, it makes it hard to extract information that's
     # computed during the while_loop, e.g. the sampled locations
-    # See the code commented out below GlimpseDecoder above for how to use it
 
     def cond(t, *args):
         return tf.less(t, params['num_glimpses'])
@@ -217,7 +216,6 @@ def ram_model_fn(features, labels, mode, params):
 
     # evaluation mode
     if mode == tf.estimator.ModeKeys.EVAL:
-        # TODO: evaluate!
         accuracy = tf.metrics.accuracy(labels=labels,
                                        predictions=predicted_classes)
         metrics = {'accuracy': accuracy}
@@ -229,9 +227,7 @@ def ram_model_fn(features, labels, mode, params):
         variables = tf.trainable_variables()
         loc_net_vars = [var for var in variables if 'location_network' in
                         var.name]
-        print(loc_net_vars)
         core_net_vars = [var for var in variables if var not in loc_net_vars]
-        print(core_net_vars)
         # TODO: hybrid loss for core as well?
         core_gradients = tf.gradients(class_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
