@@ -150,8 +150,6 @@ def ram_model_fn(features, labels, mode, params):
     locs = tf.random_uniform(
         [batch_size, params['loc_dim']],
         minval=-1., maxval=1.)
-    # -- loc_means: [None, loc_dim]
-    loc_means = tf.zeros([batch_size, params['loc_dim']])
     glimpse = glimpse_network(images, locs)
     state = rnn_cell.zero_state(batch_size, tf.float32)
 
@@ -164,12 +162,8 @@ def ram_model_fn(features, labels, mode, params):
     # I had been using tf.contrib.seq2seq.dynamic_decode, but because of how it
     # hides the tf.while_loop, it makes it hard to extract information that's
     # computed during the while_loop, e.g. the sampled locations
-    def initialize_ta(N, init_tensor):
-        ta = tf.TensorArray(tf.float32, N)
-        ta = ta.write(0, init_tensor)
-        return ta
-    locs_ta = initialize_ta(1+params['num_glimpses'], locs)
-    loc_means_ta = initialize_ta(1+params['num_glimpses'], loc_means)
+    locs_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
+    loc_means_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
     outputs_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
 
     def cond(t, *args):
@@ -179,14 +173,13 @@ def ram_model_fn(features, labels, mode, params):
         # run the core network
         with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
             output, new_state = rnn_cell(glimpse, state)
-            outputs_ta = outputs_ta.write(t, output)
 
         # get new location
         cur_locs, cur_loc_means = location_network(output, is_training)
         # store new values
-        # TODO: can this be done better with TensorArrays?
-        locs_ta = locs_ta.write(t+1, cur_locs)
-        loc_means_ta = loc_means_ta.write(t+1, cur_loc_means)
+        locs_ta = locs_ta.write(t, cur_locs)  # t+1 because of init_loc
+        loc_means_ta = loc_means_ta.write(t, cur_loc_means)
+        outputs_ta = outputs_ta.write(t, output)
 
         # get next glimpse
         new_glimpse = glimpse_network(images, cur_locs)
@@ -205,10 +198,9 @@ def ram_model_fn(features, labels, mode, params):
         # entries at each step into a Tensor [batch_size, time_steps, dim]
         tensor = ta.stack()
         return tf.transpose(tensor, perm=[1, 0, 2])
-
-    # [batch_size, 1+num_glimpses, loc_dim]
+    # [batch_size, num_glimpses, loc_dim]
     locs = ta_to_batch_major(locs_ta)
-    # [batch_size, 1+num_glimpses, loc_dim]
+    # [batch_size, num_glimpses, loc_dim]
     loc_means = ta_to_batch_major(loc_means_ta)
     # [batch_size, num_glimpses, core_size]
     outputs = ta_to_batch_major(outputs_ta)
@@ -240,11 +232,6 @@ def ram_model_fn(features, labels, mode, params):
                 labels=labels, logits=logits))
 
         # reinforce loss for location
-        # ignore first step, since that's a random loc choice
-        # -- reshaped: [batch_size, num_glimpses, loc_dim]
-        locs = locs[:, 1:, :]
-        loc_means = loc_means[:, 1:, :]
-
         def log_likelihood(means, locs, std):
             dist = tf.distributions.Normal(means, params['std'])
             # -- logll: [batch_size, num_glimpses, loc_dim]
