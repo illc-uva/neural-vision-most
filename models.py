@@ -279,21 +279,23 @@ def ram_model_fn(features, labels, mode, params):
 
     # training mode
     if mode == tf.estimator.ModeKeys.TRAIN:
-        variables = tf.trainable_variables()
 
-        # NOTE: the block below was a cruder way of training location and core
-        # networks separately; I'm fairly confident that the hybrid loss with
-        # stop_gradients as applied currently works
-        """
+        variables = tf.trainable_variables()
+        # NOTE: the block below is a direct way of training location and core
+        # networks separately; I'm fairly confident that the total loss with
+        # stop_gradients as implemented further below also works
         loc_net_vars = [var for var in variables if 'location_network' in
                         var.name]
         core_net_vars = [var for var in variables if var not in loc_net_vars]
-        # should hybrid loss also have reinforce in it?
+
+        # gradients for core, glimpse, baseline network
         hybrid_loss = class_loss + tf.losses.mean_squared_error(
             baselines, tf.stop_gradient(reward))
         core_gradients = tf.gradients(hybrid_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
                                                    params['max_grad_norm'])
+
+        # gradients for location network
         loc_gradients = tf.gradients(reinforce_loss, loc_net_vars)
         loc_gradients, _ = tf.clip_by_global_norm(loc_gradients,
                                                   params['max_grad_norm'])
@@ -301,7 +303,12 @@ def ram_model_fn(features, labels, mode, params):
         grads_and_vars = []
         grads_and_vars.extend(zip(core_gradients, core_net_vars))
         grads_and_vars.extend(zip(loc_gradients, loc_net_vars))
+
         """
+
+        # TODO: does this total_loss, with appropriate stop_gradient in
+        # location_network, work the same as the above method of explicitly
+        # training the two networks separately?
 
         total_loss = (class_loss + reinforce_loss +
                       # train baseline here, to approximate expected reward, of
@@ -312,9 +319,7 @@ def ram_model_fn(features, labels, mode, params):
         gradients, _ = tf.clip_by_global_norm(gradients,
                                               params['max_grad_norm'])
         grads_and_vars = zip(gradients, variables)
-
-        # TODO: can we do one loss function, sum of hybrid and reinforce, with
-        # gradients for all variables?
+        """
 
         # TODO: parameterize optimizer
         optimizer = tf.train.AdamOptimizer(1e-5)
