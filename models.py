@@ -124,7 +124,8 @@ def ram_model_fn(features, labels, mode, params):
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
             # TODO: Lewis implements Location Network here
             # tanh to force [-1, 1] values
-            means = tf.layers.dense(rnn_output, params['loc_dim'],
+            core_net_output = tf.stop_gradient(rnn_output)
+            means = tf.layers.dense(core_net_output, params['loc_dim'],
                                     activation=tf.tanh)
 
             if sampling:
@@ -134,6 +135,7 @@ def ram_model_fn(features, labels, mode, params):
                         [tf.shape(rnn_output)[0], params['loc_dim']],
                         stddev=std),
                     -1., 1.)
+                locs = tf.stop_gradient(locs)
             else:
                 locs = means
 
@@ -202,6 +204,7 @@ def ram_model_fn(features, labels, mode, params):
     locs = ta_to_batch_major(locs_ta)
     # [batch_size, num_glimpses, loc_dim]
     loc_means = ta_to_batch_major(loc_means_ta)
+    loc_means = tf.Print(loc_means, [loc_means], summarize=64)
     # [batch_size, num_glimpses, core_size]
     outputs = ta_to_batch_major(outputs_ta)
 
@@ -261,7 +264,9 @@ def ram_model_fn(features, labels, mode, params):
             baselines = tf.layers.dense(outputs, 1)
             # [batch_size, num_glimpses]
             baselines = tf.squeeze(baselines)
+        # don't train baseline here; only with MSE later
         adv = reward - tf.stop_gradient(baselines)
+        # final reinforce loss
         reinforce_loss = -tf.reduce_mean(logll * adv)
 
     # evaluation mode
@@ -275,23 +280,44 @@ def ram_model_fn(features, labels, mode, params):
     # training mode
     if mode == tf.estimator.ModeKeys.TRAIN:
         variables = tf.trainable_variables()
+
+        # NOTE: the block below was a cruder way of training location and core
+        # networks separately; I'm fairly confident that the hybrid loss with
+        # stop_gradients as applied currently works
+        """
         loc_net_vars = [var for var in variables if 'location_network' in
                         var.name]
         core_net_vars = [var for var in variables if var not in loc_net_vars]
-        # TODO: hybrid loss for core as well?
-        core_gradients = tf.gradients(class_loss, core_net_vars)
+        # should hybrid loss also have reinforce in it?
+        hybrid_loss = class_loss + tf.losses.mean_squared_error(
+            baselines, tf.stop_gradient(reward))
+        core_gradients = tf.gradients(hybrid_loss, core_net_vars)
         core_gradients, _ = tf.clip_by_global_norm(core_gradients,
                                                    params['max_grad_norm'])
         loc_gradients = tf.gradients(reinforce_loss, loc_net_vars)
         loc_gradients, _ = tf.clip_by_global_norm(loc_gradients,
                                                   params['max_grad_norm'])
 
-
-        # TODO: parameterize optimizer
-        optimizer = tf.train.AdamOptimizer()
         grads_and_vars = []
         grads_and_vars.extend(zip(core_gradients, core_net_vars))
         grads_and_vars.extend(zip(loc_gradients, loc_net_vars))
+        """
+
+        total_loss = (class_loss + reinforce_loss +
+                      # train baseline here, to approximate expected reward, of
+                      # which reward is an unbiased estimator
+                      tf.losses.mean_squared_error(baselines,
+                                                   tf.stop_gradient(reward)))
+        gradients = tf.gradients(total_loss, variables)
+        gradients, _ = tf.clip_by_global_norm(gradients,
+                                              params['max_grad_norm'])
+        grads_and_vars = zip(gradients, variables)
+
+        # TODO: can we do one loss function, sum of hybrid and reinforce, with
+        # gradients for all variables?
+
+        # TODO: parameterize optimizer
+        optimizer = tf.train.AdamOptimizer(1e-5)
         train_op = optimizer.apply_gradients(
             grads_and_vars,
             global_step=tf.train.get_global_step())
