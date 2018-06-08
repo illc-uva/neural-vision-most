@@ -67,14 +67,74 @@ def ffnn_model_fn(features, labels, mode, params):
                                       eval_metric_ops=metrics)
 
 
-def cnn_model_fn(features, labels, mode, params):
-
+def cnn_model_fn(features, labels, mode):
+  """Model function for CNN."""
+    # images is the input layer
     images = features[params['img_feature_name']]
+    # net carries forward the currrent output of the graph
     net = images
+  
+    training = mode == tf.estimator.ModeKeys.TRAIN  
+    """one problem here is that each set of convolutional and pool layers will 
+    be passed the same set of parameters - whereas I think it's typical to 
+    increase the number of filters as the image shrinks"""
+    # loop for adding a convolutional layer and max pooling layer pair
+    for layer in params["layers"]:    
+        # convolutional layer
+        net = tf.layers.conv2d(
+            inputs = net,
+            filters = layer['filters'],
+            kernel_size = layer['kernel_size'],
+            padding = layer['padding'],
+            activation = layer['activation']
+        
+        # pooling layer
+        net = tf.layers.max_pooling2d(
+            inputs = net, 
+            pool_size = layers['pool_size'], 
+            strides = layers['strides'])
 
-    # TODO: Lewis will implement CNN here
+  # flattening the output of the last max pooling layer into a batch of vectors
+  # TODO - work out how to feed in the H*W*C of "net" as the new shape
+  net = tf.reshape(net, [batch_size, -1])
+ 
+  # Dense Layer
+  net = tf.layers.dense(inputs=net, units=1024, activation=tf.nn.relu)
 
-    return
+  # Add dropout operation; 0.6 probability that element will be kept
+  net = tf.layers.dropout(
+      inputs=net, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+
+  # Logits layer
+  logits = tf.layers.dense(inputs= net, units=params['num_classes'], activation=None)
+
+  predictions = {
+      # Generate predictions (for PREDICT and EVAL mode)
+      "classes": tf.argmax(input=logits, axis=1),
+      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+      # `logging_hook`.
+      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+  }
+  if mode == tf.estimator.ModeKeys.PREDICT:
+    return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+
+  # Calculate Loss (for both TRAIN and EVAL modes)
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+
+  # Configure the Training Op (for TRAIN mode)
+  if mode == tf.estimator.ModeKeys.TRAIN:
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+    train_op = optimizer.minimize(
+        loss=loss,
+        global_step=tf.train.get_global_step())
+    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+
+  # Add evaluation metrics (for EVAL mode)
+  eval_metric_ops = {
+      "accuracy": tf.metrics.accuracy(
+          labels=labels, predictions=predictions["classes"])}
+  return tf.estimator.EstimatorSpec(
+      mode=mode, loss=loss, eval_metric_ops=eval_metric_ops) 
 
 
 ################################################################
