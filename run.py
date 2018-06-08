@@ -27,6 +27,8 @@ img_size = 256
 batch_size = 64
 num_classes = 2
 
+tf.logging.set_verbosity(tf.logging.INFO)
+
 
 def run():
 
