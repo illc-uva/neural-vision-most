@@ -17,6 +17,7 @@ Copyright (c) 2018 Shane Steinert-Threlkeld
     *****
 """
 import tensorflow as tf
+import numpy as np
 
 
 def ffnn_model_fn(features, labels, mode, params):
@@ -67,10 +68,11 @@ def ffnn_model_fn(features, labels, mode, params):
                                       eval_metric_ops=metrics)
 
 
-def cnn_model_fn(features, labels, mode):
-  """Model function for CNN."""
+def cnn_model_fn(features, labels, mode, params):
+    """Model function for CNN."""
     # images is the input layer
     images = features[params['img_feature_name']]
+    batch_size = tf.shape(images)[0]
     # net carries forward the currrent output of the graph
     net = images
   
@@ -86,55 +88,55 @@ def cnn_model_fn(features, labels, mode):
             filters = layer['filters'],
             kernel_size = layer['kernel_size'],
             padding = layer['padding'],
-            activation = layer['activation']
+            activation = layer['activation'])
         
         # pooling layer
         net = tf.layers.max_pooling2d(
             inputs = net, 
-            pool_size = layers['pool_size'], 
-            strides = layers['strides'])
-
-  # flattening the output of the last max pooling layer into a batch of vectors
-  # TODO - work out how to feed in the H*W*C of "net" as the new shape
-  net = tf.reshape(net, [batch_size, -1])
+            pool_size = layer['pool_size'], 
+            strides = layer['strides'])
+        
+    # flattening the output of the last max pooling layer into a batch of vectors
+    # TODO - work out how to feed in the H*W*C of "net" as the new shape
+    net = tf.reshape(net, [batch_size, np.prod(net.shape[1:])])
  
-  # Dense Layer
-  net = tf.layers.dense(inputs=net, units=1024, activation=tf.nn.relu)
+    # Dense Layer
+    net = tf.layers.dense(inputs=net, units=1024, activation=tf.nn.relu)
 
-  # Add dropout operation; 0.6 probability that element will be kept
-  net = tf.layers.dropout(
+    # Add dropout operation; 0.6 probability that element will be kept 
+    net = tf.layers.dropout(
       inputs=net, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
-  # Logits layer
-  logits = tf.layers.dense(inputs= net, units=params['num_classes'], activation=None)
+    # Logits layer
+    logits = tf.layers.dense(inputs=net, units=params['num_classes'], activation=None)
 
-  predictions = {
-      # Generate predictions (for PREDICT and EVAL mode)
-      "classes": tf.argmax(input=logits, axis=1),
-      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
-      # `logging_hook`.
-      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
-  }
-  if mode == tf.estimator.ModeKeys.PREDICT:
-    return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+    predictions = {
+        # Generate predictions (for PREDICT and EVAL mode)
+        "classes": tf.argmax(input=logits, axis=1),
+        # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+        # `logging_hook`.
+        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+    }
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
-  # Calculate Loss (for both TRAIN and EVAL modes)
-  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+    # Calculate Loss (for both TRAIN and EVAL modes)
+    loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
-  # Configure the Training Op (for TRAIN mode)
-  if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-    train_op = optimizer.minimize(
-        loss=loss,
-        global_step=tf.train.get_global_step())
-    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+    # Configure the Training Op (for TRAIN mode)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        train_op = optimizer.minimize(
+            loss=loss,
+            global_step=tf.train.get_global_step())
+        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
-  # Add evaluation metrics (for EVAL mode)
-  eval_metric_ops = {
-      "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predictions["classes"])}
-  return tf.estimator.EstimatorSpec(
-      mode=mode, loss=loss, eval_metric_ops=eval_metric_ops) 
+    # Add evaluation metrics (for EVAL mode)
+    eval_metric_ops = {
+        "accuracy": tf.metrics.accuracy(
+            labels=labels, predictions=predictions["classes"])}
+    return tf.estimator.EstimatorSpec(
+        mode=mode, loss=loss, eval_metric_ops=eval_metric_ops) 
 
 
 ################################################################
