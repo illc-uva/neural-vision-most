@@ -77,9 +77,255 @@ def cnn_model_fn(features, labels, mode, params):
     return
 
 
+################################################################
+# Recurrent Attention Model
+# From Mnih et al 2014, Recurrent Models of Visual Attention
+# TODO: document!
+################################################################
 def ram_model_fn(features, labels, mode, params):
 
     images = features[params['img_feature_name']]
-    net = images
+    batch_size = tf.shape(images)[0]
+    tf.summary.image('images', images, max_outputs=8)
 
-    return
+    # define network components 
+    # NOTE: no actual tf Variables are initialized yet!
+
+    # retina
+    def retina(images, locs, scope='retina'):
+        # TODO: more than one resolution!
+        with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+            return tf.image.extract_glimpse(
+                images,
+                [params['patch_size'], params['patch_size']],
+                locs)
+
+    # glimpse network
+    def glimpse_network(images, locs, scope='glimpse_network'):
+        # -- patches: [batch_size, patch_size, patch_size, 3]
+        patches = retina(images, locs)
+        with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+            patches = tf.reshape(patches,
+                                 [tf.shape(patches)[0],
+                                  params['patch_size']**2*3])
+
+            # TODO: Lewis implements Glimpse Network here, using also
+            # params['g_size'] and params['l_size']
+            # NOTE: right now, locs not being used at all in computing output,
+            # as needed for full model and for real learning; right now, LSTM
+            # sees a processed patch, but no info about location the patch is
+            # from...
+            return tf.layers.dense(patches, params['glimpse_out_size'])
+
+    # location_network
+    # TODO: make std a param, or learnable?
+    def location_network(rnn_output, sampling, std=params['std'],
+                         scope='location_network'):
+        with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+            # TODO: Lewis implements Location Network here
+            # tanh to force [-1, 1] values
+            core_net_output = tf.stop_gradient(rnn_output)
+            means = tf.layers.dense(core_net_output, params['loc_dim'],
+                                    activation=tf.tanh)
+
+            if sampling:
+                # clip to force [-1, 1] values
+                locs = tf.clip_by_value(
+                    means + tf.random_normal(
+                        [tf.shape(rnn_output)[0], params['loc_dim']],
+                        stddev=std),
+                    -1., 1.)
+                locs = tf.stop_gradient(locs)
+            else:
+                locs = means
+
+            return locs, means
+
+    # core network
+    # TODO: parameterize rnn_cell, i.e. implement split cell from paper
+    rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+
+    # get initial location, glimpses, and state
+
+    # TODO: initial loc as a separate network?
+    # -- locs: [None, loc_dim]
+    locs = tf.random_uniform(
+        [batch_size, params['loc_dim']],
+        minval=-1., maxval=1.)
+    glimpse = glimpse_network(images, locs)
+    state = rnn_cell.zero_state(batch_size, tf.float32)
+
+    # set up the main loop, for sampling locations and extracting glimpses
+    is_training = mode == tf.estimator.ModeKeys.TRAIN
+
+    # NOTE: the use of a tf.while_loop allows extracting information by passing
+    # through and concatenating to a tensor at each iteration.
+    # Or, as I'm doing now, by writing to a TensorArray
+    # I had been using tf.contrib.seq2seq.dynamic_decode, but because of how it
+    # hides the tf.while_loop, it makes it hard to extract information that's
+    # computed during the while_loop, e.g. the sampled locations
+    locs_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
+    loc_means_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
+    outputs_ta = tf.TensorArray(tf.float32, params['num_glimpses'])
+
+    def cond(t, *args):
+        return tf.less(t, params['num_glimpses'])
+
+    def body(t, glimpse, state, outputs_ta, locs_ta, loc_means_ta):
+        # run the core network
+        with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
+            output, new_state = rnn_cell(glimpse, state)
+
+        # get new location
+        cur_locs, cur_loc_means = location_network(output, is_training)
+        # store new values
+        locs_ta = locs_ta.write(t, cur_locs)  # t+1 because of init_loc
+        loc_means_ta = loc_means_ta.write(t, cur_loc_means)
+        outputs_ta = outputs_ta.write(t, output)
+
+        # get next glimpse
+        new_glimpse = glimpse_network(images, cur_locs)
+        return t+1, new_glimpse, new_state, outputs_ta, locs_ta, loc_means_ta
+
+    # THE MAIN LOOP!
+    time = tf.constant(0)
+    time, glimpse, state, outputs_ta, locs_ta, loc_means_ta = (
+        tf.while_loop(
+            cond,
+            body,
+            [time, glimpse, state, outputs_ta, locs_ta, loc_means_ta]))
+
+    def ta_to_batch_major(ta):
+        # turns a TensorArray of time_steps length with [batch_size, dim]
+        # entries at each step into a Tensor [batch_size, time_steps, dim]
+        tensor = ta.stack()
+        return tf.transpose(tensor, perm=[1, 0, 2])
+    # [batch_size, num_glimpses, loc_dim]
+    locs = ta_to_batch_major(locs_ta)
+    # [batch_size, num_glimpses, loc_dim]
+    loc_means = ta_to_batch_major(loc_means_ta)
+    loc_means = tf.Print(loc_means, [loc_means], summarize=64)
+    # [batch_size, num_glimpses, core_size]
+    outputs = ta_to_batch_major(outputs_ta)
+
+    # classification
+    # -- last_outputs: [batch_size, core_size]
+    _, last_outputs = state
+    with tf.variable_scope('action_network', reuse=tf.AUTO_REUSE):
+        logits = tf.layers.dense(last_outputs, params['num_classes'])
+        predicted_classes = tf.argmax(logits, axis=1)
+        predicted_classes = tf.cast(predicted_classes, tf.int32)
+
+    # `prediction` mode
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        # collect outputs here
+        outputs = {
+            'logits': logits,
+            'classes': predicted_classes,
+            'locs': locs,
+            'loc_means': loc_means,
+        }
+        return tf.estimator.EstimatorSpec(mode, predictions=outputs)
+
+    # losses
+    with tf.variable_scope('losses'):
+        # classification loss
+        class_loss = tf.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=labels, logits=logits))
+
+        # reinforce loss for location
+        def log_likelihood(means, locs, std):
+            dist = tf.distributions.Normal(means, params['std'])
+            # -- logll: [batch_size, num_glimpses, loc_dim]
+            logll = dist.log_prob(locs)
+            # -- logll: [batch_size, num_glimpses]
+            logll = tf.reduce_sum(logll, 2)
+            return logll
+
+        # log_prob(x_t | s_1:t-1)
+        logll = log_likelihood(loc_means, locs,
+                               params['std'])
+        # reward: 1 for correct class, 0 for incorrect
+        reward = tf.to_float(tf.equal(predicted_classes, labels))
+        # reward: [batch_size, 1]
+        reward = tf.expand_dims(reward, 1)
+        # reward: [batch_size, num_glimpses]
+        # NB: 1/0 at each time step is `cumulative' reward
+        reward = tf.tile(reward, [1, params['num_glimpses']])
+        # normalize reward
+        # r_mean, r_std = tf.nn.moments(reward, axes=[0, 1])
+        # reward = (reward - r_mean) / (r_std + 1e-10)
+        # TODO: baseline for variance reduction
+        # NB: requires getting all rnn_outputs from while_loop, not just the
+        # final one
+        with tf.variable_scope('baseline', reuse=tf.AUTO_REUSE):
+            # [batch_size, num_glimpses, 1]
+            baselines = tf.layers.dense(outputs, 1)
+            # [batch_size, num_glimpses]
+            baselines = tf.squeeze(baselines)
+        # don't train baseline here; only with MSE later
+        adv = reward - tf.stop_gradient(baselines)
+        # final reinforce loss
+        reinforce_loss = -tf.reduce_mean(logll * adv)
+
+    # evaluation mode
+    if mode == tf.estimator.ModeKeys.EVAL:
+        accuracy = tf.metrics.accuracy(labels=labels,
+                                       predictions=predicted_classes)
+        metrics = {'accuracy': accuracy}
+        return tf.estimator.EstimatorSpec(mode, loss=class_loss,
+                                          eval_metric_ops=metrics)
+
+    # training mode
+    if mode == tf.estimator.ModeKeys.TRAIN:
+
+        variables = tf.trainable_variables()
+        # NOTE: the block below is a direct way of training location and core
+        # networks separately; I'm fairly confident that the total loss with
+        # stop_gradients as implemented further below also works
+        loc_net_vars = [var for var in variables if 'location_network' in
+                        var.name]
+        core_net_vars = [var for var in variables if var not in loc_net_vars]
+
+        # gradients for core, glimpse, baseline network
+        hybrid_loss = class_loss + tf.losses.mean_squared_error(
+            baselines, tf.stop_gradient(reward))
+        core_gradients = tf.gradients(hybrid_loss, core_net_vars)
+        core_gradients, _ = tf.clip_by_global_norm(core_gradients,
+                                                   params['max_grad_norm'])
+
+        # gradients for location network
+        loc_gradients = tf.gradients(reinforce_loss, loc_net_vars)
+        loc_gradients, _ = tf.clip_by_global_norm(loc_gradients,
+                                                  params['max_grad_norm'])
+
+        grads_and_vars = []
+        grads_and_vars.extend(zip(core_gradients, core_net_vars))
+        grads_and_vars.extend(zip(loc_gradients, loc_net_vars))
+
+        """
+
+        # TODO: does this total_loss, with appropriate stop_gradient in
+        # location_network, work the same as the above method of explicitly
+        # training the two networks separately?
+
+        total_loss = (class_loss + reinforce_loss +
+                      # train baseline here, to approximate expected reward, of
+                      # which reward is an unbiased estimator
+                      tf.losses.mean_squared_error(baselines,
+                                                   tf.stop_gradient(reward)))
+        gradients = tf.gradients(total_loss, variables)
+        gradients, _ = tf.clip_by_global_norm(gradients,
+                                              params['max_grad_norm'])
+        grads_and_vars = zip(gradients, variables)
+        """
+
+        # TODO: parameterize optimizer
+        optimizer = tf.train.AdamOptimizer(1e-5)
+        train_op = optimizer.apply_gradients(
+            grads_and_vars,
+            global_step=tf.train.get_global_step())
+
+        return tf.estimator.EstimatorSpec(mode, loss=class_loss,
+                                          train_op=train_op)

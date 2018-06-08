@@ -24,35 +24,63 @@ import models
 
 img_feature_name = 'image'
 img_size = 256
-batch_size = 64
+patch_size = 12
+batch_size = 16
 num_classes = 2
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def run():
+    # TODO: figure out best way of having FFNN, CNN, RAM, each with parameters,
+    # and called from the command-line
 
+    # TODO: should input_fn's use one_shot_iterators and return get_next?
     def train_input_fn():
-        # return make_input_fn('images/train/*.png', batch_size=batch_size)
         return data.make_dataset('images/train/*.png', img_feature_name,
                                  shuffle=True, batch_size=batch_size,
-                                 num_epochs=2)
+                                 num_epochs=3)
 
     def test_input_fn():
         return data.make_dataset('images/test/*.png', img_feature_name,
                                  shuffle=False)
 
-    img_feature_columns = [tf.feature_column.numeric_column(
-        img_feature_name, shape=[img_size, img_size, 3])]
-
-    ffnn_runconfig = tf.estimator.RunConfig(
+    save_runconfig = tf.estimator.RunConfig(
         save_checkpoints_secs=60,
         keep_checkpoint_max=3
     )
+
+    model = tf.estimator.Estimator(
+        models.ram_model_fn,
+        model_dir='/tmp/ram_test',
+        config=save_runconfig,
+        params={
+            'img_feature_name': img_feature_name,
+            'img_size': img_size,
+            'patch_size': patch_size,
+            # TODO: get these from paper
+            'g_size': 64,
+            'l_size': 64,
+            'glimpse_out_size': 128,
+            'loc_dim': 2,  # x, y
+            'std': 0.2,
+            'core_size': 128,
+            'num_glimpses': 4,
+            'num_classes': 2,
+            'max_grad_norm': 5.0
+        })
+    model.train(input_fn=train_input_fn)
+    # print(list(model.predict(input_fn=test_input_fn)))
+    print(model.evaluate(input_fn=test_input_fn))
+
+    """
+    img_feature_columns = [tf.feature_column.numeric_column(
+        img_feature_name, shape=[img_size, img_size, 3])]
+
     model = tf.estimator.Estimator(
         models.ffnn_model_fn,
         model_dir='/tmp/test',
-        config=ffnn_runconfig,
+        config=save_runconfig,
         params={
             'feature_columns': img_feature_columns,
             'layers': [
@@ -63,6 +91,7 @@ def run():
 
     model.train(input_fn=train_input_fn)
     print(model.evaluate(input_fn=test_input_fn))
+    """
 
 
 run()

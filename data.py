@@ -25,7 +25,8 @@ import tensorflow as tf
 
 def parse_file(filename, label, key):
     image_string = tf.read_file(filename)
-    image = tf.image.decode_png(image_string, channels=3)
+    image = tf.to_float(
+        tf.image.decode_png(image_string, channels=3))
     return {key: image}, label
 
 
