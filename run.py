@@ -28,6 +28,8 @@ patch_size = 12
 batch_size = 16
 num_classes = 2
 
+tf.logging.set_verbosity(tf.logging.INFO)
+
 
 def run():
     # TODO: figure out best way of having FFNN, CNN, RAM, each with parameters,
@@ -37,6 +39,7 @@ def run():
     def train_input_fn():
         return data.make_dataset('images/train/*.png', img_feature_name,
                                  shuffle=True, batch_size=batch_size,
+                                 img_size=img_size,
                                  num_epochs=3)
 
     def test_input_fn():
@@ -47,7 +50,30 @@ def run():
         save_checkpoints_secs=60,
         keep_checkpoint_max=3
     )
+    
+       # Create the Estimator
+    model = tf.estimator.Estimator(
+        models.cnn_model_fn,
+        model_dir='/tmp/test_cnn',
+        config=save_runconfig,
+        params={
+            'img_feature_name': img_feature_name,
+            'layers': [
+                {'filters': 32,
+                 'kernel_size' : 4,
+                 'padding' : "SAME",
+                 'activation': tf.nn.relu,
+                 'pool_size' : 2,
+                 'strides' : 2},
+                 {'filters': 64,
+                 'kernel_size' : 4,
+                 'padding' : "SAME",
+                 'activation': tf.nn.relu,
+                 'pool_size' : 2,
+                 'strides' : 2}],
+            'num_classes': 2})
 
+    """
     model = tf.estimator.Estimator(
         models.ram_model_fn,
         model_dir='/tmp/ram_test',
@@ -71,7 +97,7 @@ def run():
     # print(list(model.predict(input_fn=test_input_fn)))
     print(model.evaluate(input_fn=test_input_fn))
 
-    """
+
     img_feature_columns = [tf.feature_column.numeric_column(
         img_feature_name, shape=[img_size, img_size, 3])]
 
@@ -86,10 +112,11 @@ def run():
                  'activation': tf.nn.elu,
                  'dropout': None}]*2,
             'num_classes': 2})
+    """
 
     model.train(input_fn=train_input_fn)
     print(model.evaluate(input_fn=test_input_fn))
-    """
+    
 
 
 run()

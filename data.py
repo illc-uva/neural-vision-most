@@ -23,10 +23,13 @@ import tensorflow as tf
 # tf.enable_eager_execution()
 
 
-def parse_file(filename, label, key):
+def parse_file(filename, label, key, img_size):
     image_string = tf.read_file(filename)
     image = tf.to_float(
         tf.image.decode_png(image_string, channels=3))
+    print(image.shape)
+    image.set_shape([img_size, img_size, 3])
+    print(image.shape)
     return {key: image}, label
 
 
@@ -47,14 +50,14 @@ def label_from_filename(filename, colors=['y', 'b'],
     return eval_fn(colors_dict)
 
 
-def make_dataset(filename_pattern, img_feature_name,
+def make_dataset(filename_pattern, img_feature_name, img_size,
                  shuffle=True, batch_size=None, num_epochs=1):
     filenames = glob.glob(filename_pattern)
     labels = [label_from_filename(filename) for filename in filenames]
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     # get image tensors
     dataset = dataset.map(lambda filename, label: parse_file(
-        filename, label, img_feature_name))
+        filename, label, img_feature_name, img_size))
     # shuffle
     if shuffle:
         dataset = dataset.shuffle(len(filenames))
