@@ -21,19 +21,14 @@ import tensorflow as tf
 import data
 import models
 
-img_feature_name = 'image'
-img_size = 256
-patch_size = 12
-batch_size = 16
-num_classes = 2
-
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def ffnn(args, run_config):
 
     img_feature_columns = [tf.feature_column.numeric_column(
-        img_feature_name, shape=[img_size, img_size, 3])]
+        args.img_feature_name, shape=[args.img_size, args.img_size,
+                                      args.num_channels])]
 
     return tf.estimator.Estimator(
         models.ffnn_model_fn,
@@ -45,7 +40,7 @@ def ffnn(args, run_config):
                 {'units': 128,
                  'activation': tf.nn.elu,
                  'dropout': None}]*2,
-            'num_classes': 2})
+            'num_classes': args.num_classes})
 
 
 def cnn(args, run_config):
@@ -54,7 +49,7 @@ def cnn(args, run_config):
         model_dir=args.out_path,
         config=run_config,
         params={
-            'img_feature_name': img_feature_name,
+            'img_feature_name': args.img_feature_name,
             'layers': [
                 {'filters': 32,
                  'kernel_size': 4,
@@ -68,7 +63,7 @@ def cnn(args, run_config):
                  'activation': tf.nn.relu,
                  'pool_size': 2,
                  'strides': 2}],
-            'num_classes': 2})
+            'num_classes': args.num_classes})
 
 
 def ram(args, run_config):
@@ -77,9 +72,9 @@ def ram(args, run_config):
         model_dir=args.out_path,
         config=run_config,
         params={
-            'img_feature_name': img_feature_name,
-            'img_size': img_size,
-            'patch_size': patch_size,
+            'img_feature_name': args.img_feature_name,
+            'img_size': args.img_size,
+            'patch_size': 12,
             # TODO: get these from paper
             'g_size': 64,
             'l_size': 64,
@@ -88,7 +83,7 @@ def ram(args, run_config):
             'std': 0.2,
             'core_size': 128,
             'num_glimpses': 4,
-            'num_classes': 2,
+            'num_classes': args.num_classes,
             'max_grad_norm': 5.0
         })
 
@@ -97,14 +92,15 @@ def ram(args, run_config):
 def run(args):
 
     def train_input_fn():
-        return data.make_dataset(args.train_images, img_feature_name,
-                                 shuffle=True, batch_size=batch_size,
-                                 img_size=img_size,
-                                 num_epochs=3)
+        return data.make_dataset(args.train_images, args.img_feature_name,
+                                 args.img_size, args.num_channels,
+                                 shuffle=True, batch_size=args.batch_size,
+                                 num_epochs=args.num_epochs)
 
     def test_input_fn():
-        return data.make_dataset(args.test_images, img_feature_name,
-                                 shuffle=False, img_size=img_size)
+        return data.make_dataset(args.test_images, args.img_feature_name,
+                                 args.img_size, args.num_channels,
+                                 shuffle=False)
 
     save_runconfig = tf.estimator.RunConfig(
         save_checkpoints_secs=60,
@@ -122,15 +118,33 @@ def run(args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    # file system arguments
     parser.add_argument('--out_path', help='path to outputs', type=str,
                         default='/tmp/ram')
     parser.add_argument('--train_images', help='regex to path of test images',
                         type=str, default='images/train/*.png')
     parser.add_argument('--test_images', help='regex to path of test images',
                         type=str, default='images/test/*.png')
+    # experiment arguments
+    parser.add_argument('--img_size', help='size (one int, width and height)',
+                        type=int, default=256)
+    parser.add_argument('--num_channels', help='number of channels', type=int,
+                        default=3)
+    parser.add_argument('--batch_size', help='batch size', type=int,
+                        default=64)
+    parser.add_argument('--num_epochs', help='number of epochs', type=int,
+                        default=4)
+    parser.add_argument('--img_feature_name', help='name of feature', type=str,
+                        default='image')
+    # model arguments
+    # NOTE: for now, most parameters specifically for the models are defined in
+    # the respective methods, not passed through the command-line
     parser.add_argument('--model', help='which model to use',
                         choices=['ffnn', 'cnn', 'ram'],
                         default='ram')
+    parser.add_argument('--num_classes', help='how many classes', type=int,
+                        default=2)
+    # get all args
     args = parser.parse_args()
 
     run(args)
