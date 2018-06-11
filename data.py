@@ -27,9 +27,7 @@ def parse_file(filename, label, key, img_size):
     image_string = tf.read_file(filename)
     image = tf.to_float(
         tf.image.decode_png(image_string, channels=3))
-    print(image.shape)
     image.set_shape([img_size, img_size, 3])
-    print(image.shape)
     return {key: image}, label
 
 

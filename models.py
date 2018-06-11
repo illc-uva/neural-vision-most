@@ -205,7 +205,9 @@ def ram_model_fn(features, labels, mode, params):
 
     # core network
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
-    rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+    with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
+        rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+        state = rnn_cell.zero_state(batch_size, tf.float32)
 
     # get initial location, glimpses, and state
 
@@ -214,8 +216,6 @@ def ram_model_fn(features, labels, mode, params):
     locs = tf.random_uniform(
         [batch_size, params['loc_dim']],
         minval=-1., maxval=1.)
-    glimpse = glimpse_network(images, locs)
-    state = rnn_cell.zero_state(batch_size, tf.float32)
 
     # set up the main loop, for sampling locations and extracting glimpses
     is_training = mode == tf.estimator.ModeKeys.TRAIN
@@ -233,7 +233,10 @@ def ram_model_fn(features, labels, mode, params):
     def cond(t, *args):
         return tf.less(t, params['num_glimpses'])
 
-    def body(t, glimpse, state, outputs_ta, locs_ta, loc_means_ta):
+    def body(t, state, locs, outputs_ta, locs_ta, loc_means_ta):
+
+        glimpse = glimpse_network(images, locs)
+
         # run the core network
         with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
             output, new_state = rnn_cell(glimpse, state)
@@ -245,17 +248,15 @@ def ram_model_fn(features, labels, mode, params):
         loc_means_ta = loc_means_ta.write(t, cur_loc_means)
         outputs_ta = outputs_ta.write(t, output)
 
-        # get next glimpse
-        new_glimpse = glimpse_network(images, cur_locs)
-        return t+1, new_glimpse, new_state, outputs_ta, locs_ta, loc_means_ta
+        return t+1, new_state, cur_locs, outputs_ta, locs_ta, loc_means_ta
 
     # THE MAIN LOOP!
     time = tf.constant(0)
-    time, glimpse, state, outputs_ta, locs_ta, loc_means_ta = (
+    time, state, _, outputs_ta, locs_ta, loc_means_ta = (
         tf.while_loop(
             cond,
             body,
-            [time, glimpse, state, outputs_ta, locs_ta, loc_means_ta]))
+            [time, state, locs, outputs_ta, locs_ta, loc_means_ta]))
 
     def ta_to_batch_major(ta):
         # turns a TensorArray of time_steps length with [batch_size, dim]
@@ -266,7 +267,6 @@ def ram_model_fn(features, labels, mode, params):
     locs = ta_to_batch_major(locs_ta)
     # [batch_size, num_glimpses, loc_dim]
     loc_means = ta_to_batch_major(loc_means_ta)
-    loc_means = tf.Print(loc_means, [loc_means], summarize=64)
     # [batch_size, num_glimpses, core_size]
     outputs = ta_to_batch_major(outputs_ta)
 
