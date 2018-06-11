@@ -1,5 +1,5 @@
 """
-Copyright (c) 2018 Shane Steinert-Threlkeld
+Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
 
     *****
     This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,10 @@ Copyright (c) 2018 Shane Steinert-Threlkeld
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
     *****
 """
+import argparse
 import tensorflow as tf
 import data
 import models
-# TODO: command-line args!
-# TODO: different model types
 
 img_feature_name = 'image'
 img_size = 256
@@ -31,53 +30,52 @@ num_classes = 2
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
-def run():
-    # TODO: figure out best way of having FFNN, CNN, RAM, each with parameters,
-    # and called from the command-line
+def ffnn(args, run_config):
 
-    # TODO: should input_fn's use one_shot_iterators and return get_next?
-    def train_input_fn():
-        return data.make_dataset('images/train/*.png', img_feature_name,
-                                 shuffle=True, batch_size=batch_size,
-                                 img_size=img_size,
-                                 num_epochs=3)
+    img_feature_columns = [tf.feature_column.numeric_column(
+        img_feature_name, shape=[img_size, img_size, 3])]
 
-    def test_input_fn():
-        return data.make_dataset('images/test/*.png', img_feature_name,
-                                 shuffle=False)
+    return tf.estimator.Estimator(
+        models.ffnn_model_fn,
+        model_dir=args.out_path,
+        config=run_config,
+        params={
+            'feature_columns': img_feature_columns,
+            'layers': [
+                {'units': 128,
+                 'activation': tf.nn.elu,
+                 'dropout': None}]*2,
+            'num_classes': 2})
 
-    save_runconfig = tf.estimator.RunConfig(
-        save_checkpoints_secs=60,
-        keep_checkpoint_max=3
-    )
-    
-       # Create the Estimator
-    model = tf.estimator.Estimator(
+
+def cnn(args, run_config):
+    return tf.estimator.Estimator(
         models.cnn_model_fn,
-        model_dir='/tmp/test_cnn',
-        config=save_runconfig,
+        model_dir=args.out_path,
+        config=run_config,
         params={
             'img_feature_name': img_feature_name,
             'layers': [
                 {'filters': 32,
-                 'kernel_size' : 4,
-                 'padding' : "SAME",
+                 'kernel_size': 4,
+                 'padding': "SAME",
                  'activation': tf.nn.relu,
-                 'pool_size' : 2,
-                 'strides' : 2},
-                 {'filters': 64,
-                 'kernel_size' : 4,
-                 'padding' : "SAME",
+                 'pool_size': 2,
+                 'strides': 2},
+                {'filters': 64,
+                 'kernel_size': 4,
+                 'padding': "SAME",
                  'activation': tf.nn.relu,
-                 'pool_size' : 2,
-                 'strides' : 2}],
+                 'pool_size': 2,
+                 'strides': 2}],
             'num_classes': 2})
 
-    """
-    model = tf.estimator.Estimator(
+
+def ram(args, run_config):
+    return tf.estimator.Estimator(
         models.ram_model_fn,
-        model_dir='/tmp/ram_test',
-        config=save_runconfig,
+        model_dir=args.out_path,
+        config=run_config,
         params={
             'img_feature_name': img_feature_name,
             'img_size': img_size,
@@ -93,30 +91,46 @@ def run():
             'num_classes': 2,
             'max_grad_norm': 5.0
         })
+
+
+# TODO: eval logging hook?
+def run(args):
+
+    def train_input_fn():
+        return data.make_dataset(args.train_images, img_feature_name,
+                                 shuffle=True, batch_size=batch_size,
+                                 img_size=img_size,
+                                 num_epochs=3)
+
+    def test_input_fn():
+        return data.make_dataset(args.test_images, img_feature_name,
+                                 shuffle=False, img_size=img_size)
+
+    save_runconfig = tf.estimator.RunConfig(
+        save_checkpoints_secs=60,
+        keep_checkpoint_max=3
+    )
+
+    # Create the Estimator, using --model arg (default ram)
+    model = globals()[args.model](args, save_runconfig)
+
     model.train(input_fn=train_input_fn)
-    # print(list(model.predict(input_fn=test_input_fn)))
+    print(list(model.predict(input_fn=test_input_fn)))
     print(model.evaluate(input_fn=test_input_fn))
 
 
-    img_feature_columns = [tf.feature_column.numeric_column(
-        img_feature_name, shape=[img_size, img_size, 3])]
+if __name__ == '__main__':
 
-    model = tf.estimator.Estimator(
-        models.ffnn_model_fn,
-        model_dir='/tmp/test',
-        config=save_runconfig,
-        params={
-            'feature_columns': img_feature_columns,
-            'layers': [
-                {'units': 128,
-                 'activation': tf.nn.elu,
-                 'dropout': None}]*2,
-            'num_classes': 2})
-    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--out_path', help='path to outputs', type=str,
+                        default='/tmp/ram')
+    parser.add_argument('--train_images', help='regex to path of test images',
+                        type=str, default='images/train/*.png')
+    parser.add_argument('--test_images', help='regex to path of test images',
+                        type=str, default='images/test/*.png')
+    parser.add_argument('--model', help='which model to use',
+                        choices=['ffnn', 'cnn', 'ram'],
+                        default='ram')
+    args = parser.parse_args()
 
-    model.train(input_fn=train_input_fn)
-    print(model.evaluate(input_fn=test_input_fn))
-    
-
-
-run()
+    run(args)
