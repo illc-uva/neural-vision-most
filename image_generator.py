@@ -284,5 +284,7 @@ if __name__ == '__main__':
 
     # make training set
     make_batch(trial_types, color_dicts, 5, 'images/train')
+    # make val set
+    make_batch(trial_types, color_dicts, 1, 'images/val')
     # make test set
     make_batch(trial_types, color_dicts, 1, 'images/test')
