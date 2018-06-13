@@ -17,6 +17,7 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import argparse
+from distutils import dir_util
 import tensorflow as tf
 import data
 import models
@@ -33,7 +34,7 @@ def ffnn(config, run_config):
                    config['num_channels']])]
     return tf.estimator.Estimator(
         models.ffnn_model_fn,
-        model_dir=config['out_path'],
+        model_dir=config['model_dir'],
         config=run_config,
         params={
             'feature_columns': img_feature_columns,
@@ -47,7 +48,7 @@ def ffnn(config, run_config):
 def cnn(config, run_config):
     return tf.estimator.Estimator(
         models.cnn_model_fn,
-        model_dir=config['out_path'],
+        model_dir=config['model_dir'],
         config=run_config,
         params={
             'img_feature_name': config['img_feature_name'],
@@ -70,7 +71,7 @@ def cnn(config, run_config):
 def ram(config, run_config):
     return tf.estimator.Estimator(
         models.ram_model_fn,
-        model_dir=config['out_path'],
+        model_dir=config['model_dir'],
         config=run_config,
         params={
             'img_feature_name': config['img_feature_name'],
@@ -89,7 +90,7 @@ def ram(config, run_config):
         })
 
 
-def run(config):
+def run(config, reporter=None):
 
     save_runconfig = tf.estimator.RunConfig(
         save_checkpoints_steps=50,
@@ -97,7 +98,18 @@ def run(config):
     )
 
     # Create the Estimator, using --model arg (default ram)
+    # TODO: make model_dir more robustly named for hyperparam experiments?
+    model_dir = config['out_path'] + '/' + config['model']
+    config['model_dir'] = model_dir
     model = globals()[config['model']](config, save_runconfig)
+
+    # prep eval storage
+    eval_dicts = []
+    lowest_val_loss = 1e10  # big initial number
+    patience_steps = config['patience'] // config['epochs_per_eval']
+    # make directory for saving the best model
+    best_model_dir = model_dir + '_best'
+    dir_util.mkpath(best_model_dir)
 
     for step in range(config['num_epochs'] // config['epochs_per_eval']):
 
@@ -123,9 +135,43 @@ def run(config):
 
         print('Evaluation beginning.')
         eval_results = model.evaluate(input_fn=eval_input_fn)
+        eval_results['num_epochs'] = (step+1) * config['epochs_per_eval']
+        eval_dicts.append(eval_results)
+        cur_loss = eval_results['loss']
         print('Loss after epoch {}: {}'.format(
-            (step+1)*config['epochs_per_eval'], eval_results['loss']))
-        # TODO: do stuff with eval here! save best model, early stopping...
+            eval_results['num_epochs'], cur_loss))
+
+        # save best model, report to ray tune, early stop, etc
+        if cur_loss < lowest_val_loss:
+            print('New best model, saving to ' + best_model_dir)
+            dir_util.remove_tree(best_model_dir, verbose=True)
+            dir_util.copy_tree(model_dir, best_model_dir)
+            lowest_val_loss = cur_loss
+
+        if reporter:
+            # for ray_tune
+            pass
+
+        if patience_steps < step + 1:
+            if cur_loss > eval_dicts[-patience_steps]['loss']:
+                print('No improvement over {} epochs; ending training.'.format(
+                    config['patience']))
+                break
+
+    # TODO: save eval_dicts as csv somewhere?
+
+    print('Evaluating best model on the test set.')
+
+    def test_input_fn():
+        return data.make_dataset(config['test_images'],
+                                 config['img_feature_name'],
+                                 config['img_size'],
+                                 config['num_channels'],
+                                 shuffle=False)
+
+    config['model_dir'] = best_model_dir
+    model = globals()[config['model']](config, save_runconfig)
+    print(model.evaluate(input_fn=test_input_fn))
 
 
 if __name__ == '__main__':
@@ -133,7 +179,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # file system arguments
     parser.add_argument('--out_path', help='path to outputs', type=str,
-                        default='/tmp/ram')
+                        default='/tmp')
     parser.add_argument('--train_images', help='regex to path of test images',
                         type=str, default='images/train/*.png')
     parser.add_argument('--test_images', help='regex to path of test images',
@@ -151,14 +197,16 @@ if __name__ == '__main__':
                         default=4)
     parser.add_argument('--epochs_per_eval', help='how often to evaluate',
                         type=int, default=1)
-    parser.add_argument('--img_feature_name', help='name of feature', type=str,
-                        default='image')
+    parser.add_argument('--patience', help='how many epochs w/o improvement',
+                        type=int, default=10)
     # model arguments
     # NOTE: for now, most parameters specifically for the models are defined in
     # the respective methods, not passed through the command-line
     parser.add_argument('--model', help='which model to use',
                         choices=['ffnn', 'cnn', 'ram'],
                         default='ram')
+    parser.add_argument('--img_feature_name', help='name of feature', type=str,
+                        default='image')
     parser.add_argument('--num_classes', help='how many classes', type=int,
                         default=2)
     # get all args
