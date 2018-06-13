@@ -24,15 +24,16 @@ import models
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
-def ffnn(args, run_config):
+def ffnn(config, run_config):
 
-    img_feature_columns = [tf.feature_column.numeric_column(
-        args.img_feature_name, shape=[args.img_size, args.img_size,
-                                      args.num_channels])]
-
+    img_feature_columns = [
+        tf.feature_column.numeric_column(
+            config['img_feature_name'],
+            shape=[config['img_size'], config['img_size'],
+                   config['num_channels']])]
     return tf.estimator.Estimator(
         models.ffnn_model_fn,
-        model_dir=args.out_path,
+        model_dir=config['out_path'],
         config=run_config,
         params={
             'feature_columns': img_feature_columns,
@@ -40,16 +41,16 @@ def ffnn(args, run_config):
                 {'units': 128,
                  'activation': tf.nn.elu,
                  'dropout': None}]*2,
-            'num_classes': args.num_classes})
+            'num_classes': config['num_classes']})
 
 
-def cnn(args, run_config):
+def cnn(config, run_config):
     return tf.estimator.Estimator(
         models.cnn_model_fn,
-        model_dir=args.out_path,
+        model_dir=config['out_path'],
         config=run_config,
         params={
-            'img_feature_name': args.img_feature_name,
+            'img_feature_name': config['img_feature_name'],
             'layers': [
                 {'filters': 32,
                  'kernel_size': 4,
@@ -63,17 +64,17 @@ def cnn(args, run_config):
                  'activation': tf.nn.relu,
                  'pool_size': 2,
                  'strides': 2}],
-            'num_classes': args.num_classes})
+            'num_classes': config['num_classes']})
 
 
-def ram(args, run_config):
+def ram(config, run_config):
     return tf.estimator.Estimator(
         models.ram_model_fn,
-        model_dir=args.out_path,
+        model_dir=config['out_path'],
         config=run_config,
         params={
-            'img_feature_name': args.img_feature_name,
-            'img_size': args.img_size,
+            'img_feature_name': config['img_feature_name'],
+            'img_size': config['img_size'],
             'patch_size': 12,
             # TODO: get these from paper
             'g_size': 64,
@@ -83,36 +84,48 @@ def ram(args, run_config):
             'std': 0.2,
             'core_size': 128,
             'num_glimpses': 4,
-            'num_classes': args.num_classes,
+            'num_classes': config['num_classes'],
             'max_grad_norm': 5.0
         })
 
 
-# TODO: eval logging hook?
-def run(args):
-
-    def train_input_fn():
-        return data.make_dataset(args.train_images, args.img_feature_name,
-                                 args.img_size, args.num_channels,
-                                 shuffle=True, batch_size=args.batch_size,
-                                 num_epochs=args.num_epochs)
-
-    def test_input_fn():
-        return data.make_dataset(args.test_images, args.img_feature_name,
-                                 args.img_size, args.num_channels,
-                                 shuffle=False)
+def run(config):
 
     save_runconfig = tf.estimator.RunConfig(
-        save_checkpoints_secs=60,
+        save_checkpoints_steps=50,
         keep_checkpoint_max=3
     )
 
     # Create the Estimator, using --model arg (default ram)
-    model = globals()[args.model](args, save_runconfig)
+    model = globals()[config['model']](config, save_runconfig)
 
-    model.train(input_fn=train_input_fn)
-    print(list(model.predict(input_fn=test_input_fn)))
-    print(model.evaluate(input_fn=test_input_fn))
+    for step in range(config['num_epochs'] // config['epochs_per_eval']):
+
+        # TODO: can these input_fn's be outside the loop?
+        def train_input_fn():
+            return data.make_dataset(config['train_images'],
+                                     config['img_feature_name'],
+                                     config['img_size'],
+                                     config['num_channels'],
+                                     batch_size=config['batch_size'],
+                                     num_epochs=config['epochs_per_eval'],
+                                     shuffle=True)
+
+        def eval_input_fn():
+            return data.make_dataset(config['val_images'],
+                                     config['img_feature_name'],
+                                     config['img_size'],
+                                     config['num_channels'],
+                                     shuffle=False)
+
+        print('Training beginning.')
+        model.train(input_fn=train_input_fn)
+
+        print('Evaluation beginning.')
+        eval_results = model.evaluate(input_fn=eval_input_fn)
+        print('Loss after epoch {}: {}'.format(
+            (step+1)*config['epochs_per_eval'], eval_results['loss']))
+        # TODO: do stuff with eval here! save best model, early stopping...
 
 
 if __name__ == '__main__':
@@ -125,6 +138,8 @@ if __name__ == '__main__':
                         type=str, default='images/train/*.png')
     parser.add_argument('--test_images', help='regex to path of test images',
                         type=str, default='images/test/*.png')
+    parser.add_argument('--val_images', help='regex to path of test images',
+                        type=str, default='images/val/*.png')
     # experiment arguments
     parser.add_argument('--img_size', help='size (one int, width and height)',
                         type=int, default=256)
@@ -134,6 +149,8 @@ if __name__ == '__main__':
                         default=64)
     parser.add_argument('--num_epochs', help='number of epochs', type=int,
                         default=4)
+    parser.add_argument('--epochs_per_eval', help='how often to evaluate',
+                        type=int, default=1)
     parser.add_argument('--img_feature_name', help='name of feature', type=str,
                         default='image')
     # model arguments
@@ -147,4 +164,6 @@ if __name__ == '__main__':
     # get all args
     args = parser.parse_args()
 
-    run(args)
+    # NOTE: using args.__dict__, because ray_tune passes a dictionary to the
+    # method, not an object with attributes 
+    run(args.__dict__)
