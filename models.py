@@ -79,7 +79,7 @@ def cnn_model_fn(features, labels, mode, params):
     training = mode == tf.estimator.ModeKeys.TRAIN
     # loop for adding a convolutional layer and max pooling layer pair
     for layer in params["layers"]:
-        for conv in layer["convnum"]:
+        for conv in range(layer["num_convs"]):
         # convolutional layer
             net = tf.layers.conv2d(
                     inputs=net,

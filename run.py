@@ -52,14 +52,14 @@ def cnn(config, run_config):
         params={
             'img_feature_name': config['img_feature_name'],
             'layers': [
-                {'convnum' : 2,
+                {'num_convs' : 2,
                  'filters': 32,
                  'kernel_size': 4,
                  'padding': "SAME",
                  'activation': tf.nn.relu,
                  'pool_size': 2,
                  'strides': 2},
-                {'convnum' : 1,
+                {'num_convs' : 1,
                  'filters': 64,
                  'kernel_size': 4,
                  'padding': "SAME",
