@@ -79,13 +79,14 @@ def cnn_model_fn(features, labels, mode, params):
     training = mode == tf.estimator.ModeKeys.TRAIN
     # loop for adding a convolutional layer and max pooling layer pair
     for layer in params["layers"]:
+        for conv in layer["convnum"]:
         # convolutional layer
-        net = tf.layers.conv2d(
-            inputs=net,
-            filters=layer['filters'],
-            kernel_size=layer['kernel_size'],
-            padding=layer['padding'],
-            activation=layer['activation'])
+            net = tf.layers.conv2d(
+                    inputs=net,
+                    filters=layer['filters'],
+                    kernel_size=layer['kernel_size'],
+                    padding=layer['padding'],
+                    activation=layer['activation'])
 
         # pooling layer
         net = tf.layers.max_pooling2d(
@@ -93,15 +94,21 @@ def cnn_model_fn(features, labels, mode, params):
             pool_size=layer['pool_size'],
             strides=layer['strides'])
 
-    # flattening the output of last max pooling layer into a batch of vectors
+    # flattening the output of last max pooling layer into a batch of vectors    
     net = tf.reshape(net, [batch_size, np.prod(net.shape[1:])])
 
     # Dense Layer
-    net = tf.layers.dense(inputs=net, units=1024, activation=tf.nn.relu)
+    for layer in params["dense"]:
+        net = tf.layers.dense(
+                inputs=net, 
+                units=layer["units"], 
+                activation=layer["activation"])
 
     # Add dropout operation; 0.6 probability that element will be kept 
-    net = tf.layers.dropout(
-      inputs=net, rate=0.4, training=training)
+        net = tf.layers.dropout(
+                inputs=net,
+                rate=layer["rate"],
+                training=training)
 
     # Logits layer
     logits = tf.layers.dense(inputs=net, units=params['num_classes'],
