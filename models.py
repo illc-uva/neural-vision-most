@@ -179,21 +179,29 @@ def ram_model_fn(features, labels, mode, params):
             # TODO: Lewis implements Glimpse Network here, using also
             # params['g_size'] and params['l_size']
             hidden_sensor_layer = tf.layers.dense(
-                    # not sure this is the correct input
                     inputs = patches,
                     units = params['g_size'],
                     activation = tf.nn.relu)
             
+            dense_sensor_layer = tf.layers.dense(
+                    inputs = hidden_sensor_layer,
+                    units = params['g_size'],
+                    activation = None)
+            
             hidden_location_layer = tf.layers.dense(
-                    # unsure of input here
-                    inputs = ,
+                    inputs = locs,
                     units = params['l_size'],
                     activation = tf.nn.relu)
             
+            dense_location_layer = tf.layers.dense(
+                    inputs = hidden_location_layer,
+                    units = params['l_size'],
+                    activation = None)
+            
             glimpse_out_layer = tf.layers.dense(
-                    inputs = tf.concat(
-                            values = [hidden_sensor_layer, hidden_location_layer],
-                            axis = 0),
+                    inputs = tf.add(
+                            x = dense_sensor_layer, 
+                            y = dense_location_layer),
                     units = params['glimpse_out_size'],
                     activation = tf.nn.relu)
             # NOTE: right now, locs not being used at all in computing output,
