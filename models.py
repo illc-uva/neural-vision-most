@@ -78,8 +78,8 @@ def cnn_model_fn(features, labels, mode, params):
 
     training = mode == tf.estimator.ModeKeys.TRAIN
     # loop for adding a convolutional layer and max pooling layer pair
-    for layer in params["layers"]:
-        for conv in range(layer["num_convs"]):
+    for layer in params['layers']:
+        for _ in range(layer['num_convs']):
         # convolutional layer
             net = tf.layers.conv2d(
                     inputs=net,
@@ -98,16 +98,16 @@ def cnn_model_fn(features, labels, mode, params):
     net = tf.reshape(net, [batch_size, np.prod(net.shape[1:])])
 
     # Dense Layer
-    for layer in params["dense"]:
+    for layer in params['dense']:
         net = tf.layers.dense(
                 inputs=net, 
-                units=layer["units"], 
-                activation=layer["activation"])
+                units=layer['units'], 
+                activation=layer['activation'])
 
     # Add dropout operation; 0.6 probability that element will be kept 
         net = tf.layers.dropout(
                 inputs=net,
-                rate=layer["rate"],
+                rate=layer['rate'],
                 training=training)
 
     # Logits layer
@@ -116,10 +116,10 @@ def cnn_model_fn(features, labels, mode, params):
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
-        "classes": tf.argmax(input=logits, axis=1),
+        'classes': tf.argmax(input=logits, axis=1),
         # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
         # `logging_hook`.
-        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+        'probabilities': tf.nn.softmax(logits, name='softmax_tensor')
     }
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
@@ -138,8 +138,8 @@ def cnn_model_fn(features, labels, mode, params):
 
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {
-        "accuracy": tf.metrics.accuracy(
-            labels=labels, predictions=predictions["classes"])}
+        'accuracy': tf.metrics.accuracy(
+            labels=labels, predictions=predictions['classes'])}
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -178,6 +178,24 @@ def ram_model_fn(features, labels, mode, params):
 
             # TODO: Lewis implements Glimpse Network here, using also
             # params['g_size'] and params['l_size']
+            hidden_sensor_layer = tf.layers.dense(
+                    # not sure this is the correct input
+                    inputs = patches,
+                    units = params['g_size'],
+                    activation = tf.nn.relu)
+            
+            hidden_location_layer = tf.layers.dense(
+                    # unsure of input here
+                    inputs = ,
+                    units = params['l_size'],
+                    activation = tf.nn.relu)
+            
+            glimpse_out_layer = tf.layers.dense(
+                    inputs = tf.concat(
+                            values = [hidden_sensor_layer, hidden_location_layer],
+                            axis = 0),
+                    units = params['glimpse_out_size'],
+                    activation = tf.nn.relu)
             # NOTE: right now, locs not being used at all in computing output,
             # as needed for full model and for real learning; right now, LSTM
             # sees a processed patch, but no info about location the patch is
