@@ -1,5 +1,5 @@
 """
-Copyright (c) 2018 Shane Steinert-Threlkeld
+Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
 
     *****
     This program is free software: you can redistribute it and/or modify
