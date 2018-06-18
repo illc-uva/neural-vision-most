@@ -176,40 +176,43 @@ def ram_model_fn(features, labels, mode, params):
                                  [tf.shape(patches)[0],
                                   params['patch_size']**2*3])
 
-            # TODO: Lewis implements Glimpse Network here, using also
-            # params['g_size'] and params['l_size']
             hidden_sensor_layer = tf.layers.dense(
-                    # not sure this is the correct input
-                    inputs = patches,
-                    units = params['g_size'],
-                    activation = tf.nn.relu)
+                    inputs=patches,
+                    units=params['g_size'],
+                    activation=tf.nn.relu)
+            
+            dense_sensor_layer = tf.layers.dense(
+                    inputs=hidden_sensor_layer,
+                    units=params['g_size'],
+                    activation=None)
             
             hidden_location_layer = tf.layers.dense(
-                    # unsure of input here
-                    inputs = ,
-                    units = params['l_size'],
-                    activation = tf.nn.relu)
+                    inputs=locs,
+                    units=params['l_size'],
+                    activation=tf.nn.relu)
+            
+            dense_location_layer = tf.layers.dense(
+                    inputs=hidden_location_layer,
+                    units=params['l_size'],
+                    activation=None)
             
             glimpse_out_layer = tf.layers.dense(
-                    inputs = tf.concat(
-                            values = [hidden_sensor_layer, hidden_location_layer],
-                            axis = 0),
-                    units = params['glimpse_out_size'],
-                    activation = tf.nn.relu)
-            # NOTE: right now, locs not being used at all in computing output,
-            # as needed for full model and for real learning; right now, LSTM
-            # sees a processed patch, but no info about location the patch is
-            # from...
-            return tf.layers.dense(patches, params['glimpse_out_size'])
+                    inputs=tf.add(
+                            x=dense_sensor_layer, 
+                            y=dense_location_layer),
+                    units=params['glimpse_out_size'],
+                    activation=tf.nn.relu)
+           
+            return glimpse_out_layer
 
     # location_network
     # TODO: make std a param, or learnable?
-    def location_network(rnn_output, sampling, std=params['std'],
+    def location_network(rnn_state, sampling, std=params['std'],
                          scope='location_network'):
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
             # TODO: Lewis implements Location Network here
             # tanh to force [-1, 1] values
-            core_net_output = tf.stop_gradient(rnn_output)
+            core_net_output = tf.stop_gradient(rnn_state)
             means = tf.layers.dense(core_net_output, params['loc_dim'],
                                     activation=tf.tanh)
 
@@ -217,7 +220,7 @@ def ram_model_fn(features, labels, mode, params):
                 # clip to force [-1, 1] values
                 locs = tf.clip_by_value(
                     means + tf.random_normal(
-                        [tf.shape(rnn_output)[0], params['loc_dim']],
+                        [tf.shape(rnn_state)[0], params['loc_dim']],
                         stddev=std),
                     -1., 1.)
                 locs = tf.stop_gradient(locs)
