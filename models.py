@@ -268,7 +268,7 @@ def ram_model_fn(features, labels, mode, params):
             output, new_state = rnn_cell(glimpse, state)
 
         # get new location
-        cur_locs, cur_loc_means = location_network(output, is_training)
+        cur_locs, cur_loc_means = location_network(new_state, is_training)
         # store new values
         locs_ta = locs_ta.write(t, cur_locs)  # t+1 because of init_loc
         loc_means_ta = loc_means_ta.write(t, cur_loc_means)
