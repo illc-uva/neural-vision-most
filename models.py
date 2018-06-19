@@ -232,9 +232,32 @@ def ram_model_fn(features, labels, mode, params):
     # core network
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
-        rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
-        state = rnn_cell.zero_state(batch_size, tf.float32)
+        if params['core_type'] == 'LSTM':
+            rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+            state = rnn_cell.zero_state(batch_size, tf.float32)
 
+        else:
+            def rnn_cell(glimpse, state): 
+                
+                dense_state = tf.layers.dense(
+                    inputs=state,
+                    units=params['core_size'],
+                    activation=None)
+            
+                dense_glimpse = tf.layers.dense(
+                    inputs=glimpse,
+                    units=params['core_size'],
+                    activation=None)
+                
+                output = tf.layers.dense(
+                    inputs=tf.add(
+                        x=dense_state,
+                        y=dense_glimpse),
+                    units=params['core_size'],
+                    activation=tf.nn.relu)
+                
+                return output, output
+            
     # get initial location, glimpses, and state
 
     # TODO: initial loc as a separate network?
