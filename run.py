@@ -91,8 +91,9 @@ def ram(config, run_config):
             'core_size': 128,
             'num_glimpses': 4,
             'num_classes': config['num_classes'],
-            'max_grad_norm': 5.0
-        })
+            'max_grad_norm': 5.0,
+            'core_type':'LSTM'
+            })
 
 
 def run(config):
