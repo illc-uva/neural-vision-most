@@ -246,22 +246,17 @@ def ram_model_fn(features, labels, mode, params):
             
                 dense_glimpse = tf.layers.dense(
                     inputs=glimpse,
-                    units=params['glimpse_out_size'],
+                    units=params['core_size'],
                     activation=None)
                 
-                dstate_plus_dglimpse = tf.add(
+                output = tf.layers.dense(
+                    inputs=tf.add(
                         x=dense_state,
-                        y=dense_glimpse)
-                
-                rnn_cell = tf.contrib.rnn.BasicRNNCell(
-                    num_units=params['core_size'],
+                        y=dense_glimpse),
+                    units=params['core_size'],
                     activation=tf.nn.relu)
-    
-                output, state = tf.dynamic_rnn(
-                        cell=rnn_cell,
-                        inputs=dstate_plus_dglimpse)
                 
-                return output, state
+                return output, output
             
     # get initial location, glimpses, and state
 
