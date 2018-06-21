@@ -80,7 +80,7 @@ def cnn_model_fn(features, labels, mode, params):
     # loop for adding a convolutional layer and max pooling layer pair
     for layer in params['layers']:
         for _ in range(layer['num_convs']):
-        # convolutional layer
+            # convolutional layer
             net = tf.layers.conv2d(
                     inputs=net,
                     filters=layer['filters'],
@@ -92,7 +92,7 @@ def cnn_model_fn(features, labels, mode, params):
         net = tf.layers.max_pooling2d(
             inputs=net,
             pool_size=layer['pool_size'],
-            strides=layer['strides'])
+            strides=layer['pool_strides'])
 
     # flattening the output of last max pooling layer into a batch of vectors    
     net = tf.reshape(net, [batch_size, np.prod(net.shape[1:])])

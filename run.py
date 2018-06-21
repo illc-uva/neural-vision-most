@@ -46,31 +46,61 @@ def ffnn(config, run_config):
 
 
 def cnn(config, run_config):
+    architectures = {
+        'vgg11': {
+            'layers': [
+                {'num_convs': 1,
+                 'filters': 64,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 1,
+                 'filters': 128,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 256,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 512,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 512,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+            ],
+            'dense': [
+                {'units': 4096,
+                 'activation': tf.nn.relu,
+                 'rate': 0.2}
+            ]*2
+        }
+    }
+    architecture = architectures[config['cnn_architecture'] or 'vgg11']
     return tf.estimator.Estimator(
         models.cnn_model_fn,
         model_dir=config['model_dir'],
         config=run_config,
         params={
             'img_feature_name': config['img_feature_name'],
-            'layers': [
-                {'num_convs' : 2,
-                 'filters': 32,
-                 'kernel_size': 4,
-                 'padding': 'SAME',
-                 'activation': tf.nn.relu,
-                 'pool_size': 2,
-                 'strides': 2},
-                {'num_convs' : 1,
-                 'filters': 64,
-                 'kernel_size': 4,
-                 'padding': 'SAME',
-                 'activation': tf.nn.relu,
-                 'pool_size': 2,
-                 'strides': 2}],
-            'dense': [
-                {'units' : 1024,
-                 'activation' : tf.nn.relu,
-                 'rate' : 0.4}],
+            'layers': architecture['layers'],
+            'dense': architecture['dense'],
             'num_classes': config['num_classes']})
 
 
@@ -100,7 +130,7 @@ def ram(config, run_config):
 def run(config, reporter=None):
 
     save_runconfig = tf.estimator.RunConfig(
-        save_checkpoints_steps=50,
+        save_checkpoints_steps=150,
         keep_checkpoint_max=3
     )
 
@@ -216,8 +246,10 @@ if __name__ == '__main__':
                         default='image')
     parser.add_argument('--num_classes', help='how many classes', type=int,
                         default=2)
-    parser.add_argument('--core_type', help='how many classes', type=str,
+    parser.add_argument('--core_type', help='type of RNN', type=str,
                         default='LSTM')
+    parser.add_argument('--cnn_architecture', help='architecture for CNN',
+                        type=str, default=None)
     # get all args
     args = parser.parse_args()
 
