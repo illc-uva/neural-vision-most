@@ -100,8 +100,8 @@ def cnn_model_fn(features, labels, mode, params):
     # Dense Layer
     for layer in params['dense']:
         net = tf.layers.dense(
-                inputs=net, 
-                units=layer['units'], 
+                inputs=net,
+                units=layer['units'],
                 activation=layer['activation'])
 
     # Add dropout operation; 0.6 probability that element will be kept 
@@ -180,29 +180,29 @@ def ram_model_fn(features, labels, mode, params):
                     inputs=patches,
                     units=params['g_size'],
                     activation=tf.nn.relu)
-            
+
             dense_sensor_layer = tf.layers.dense(
                     inputs=hidden_sensor_layer,
                     units=params['g_size'],
                     activation=None)
-            
+
             hidden_location_layer = tf.layers.dense(
                     inputs=locs,
                     units=params['l_size'],
                     activation=tf.nn.relu)
-            
+
             dense_location_layer = tf.layers.dense(
                     inputs=hidden_location_layer,
                     units=params['l_size'],
                     activation=None)
-            
+
             glimpse_out_layer = tf.layers.dense(
                     inputs=tf.add(
-                            x=dense_sensor_layer, 
+                            x=dense_sensor_layer,
                             y=dense_location_layer),
                     units=params['glimpse_out_size'],
                     activation=tf.nn.relu)
-           
+
             return glimpse_out_layer
 
     # location_network
@@ -237,27 +237,31 @@ def ram_model_fn(features, labels, mode, params):
             state = rnn_cell.zero_state(batch_size, tf.float32)
 
         else:
-            def rnn_cell(glimpse, state): 
-                
+            def rnn_cell(glimpse, state):
+
                 dense_state = tf.layers.dense(
-                    inputs=state,
+                    inputs=state.c,
                     units=params['core_size'],
                     activation=None)
-            
+
                 dense_glimpse = tf.layers.dense(
                     inputs=glimpse,
                     units=params['core_size'],
                     activation=None)
-                
+
                 output = tf.layers.dense(
                     inputs=tf.add(
                         x=dense_state,
                         y=dense_glimpse),
                     units=params['core_size'],
                     activation=tf.nn.relu)
-                
-                return output, output
-            
+
+                return output, tf.nn.rnn_cell.LSTMStateTuple(output, output)
+
+            state = tf.nn.rnn_cell.LSTMStateTuple(
+                tf.zeros([batch_size, params['core_size']]),
+                tf.zeros([batch_size, params['core_size']]))
+
     # get initial location, glimpses, and state
 
     # TODO: initial loc as a separate network?

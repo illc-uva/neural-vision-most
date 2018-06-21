@@ -90,10 +90,10 @@ def ram(config, run_config):
             'loc_dim': 2,  # x, y
             'std': 0.2,
             'core_size': 128,
-            'num_glimpses': 4,
+            'num_glimpses': 12,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
-            'core_type':'LSTM'
+            'core_type': config['core_type']
             })
 
 
@@ -216,6 +216,8 @@ if __name__ == '__main__':
                         default='image')
     parser.add_argument('--num_classes', help='how many classes', type=int,
                         default=2)
+    parser.add_argument('--core_type', help='how many classes', type=str,
+                        default='LSTM')
     # get all args
     args = parser.parse_args()
 
