@@ -112,14 +112,13 @@ def ram(config, run_config):
         params={
             'img_feature_name': config['img_feature_name'],
             'img_size': config['img_size'],
-            'patch_size': 12,
-            # TODO: get these from paper
-            'g_size': 64,
-            'l_size': 64,
-            'glimpse_out_size': 128,
+            'patch_size': 12,  # TODO: random search?
+            'g_size': 128,
+            'l_size': 128,
+            'glimpse_out_size': 256,
             'loc_dim': 2,  # x, y
-            'std': 0.2,
-            'core_size': 128,
+            'std': 0.2,  # TODO: random search?
+            'core_size': 256,
             'num_glimpses': 12,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
