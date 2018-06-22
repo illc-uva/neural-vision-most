@@ -40,7 +40,7 @@ def ffnn(config, run_config):
             'feature_columns': img_feature_columns,
             'layers': [
                 {'units': 128,
-                 'activation': tf.nn.elu,
+                 'activation': tf.nn.relu,
                  'dropout': None}]*2,
             'num_classes': config['num_classes']})
 
