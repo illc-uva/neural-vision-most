@@ -166,10 +166,13 @@ def ram_model_fn(features, labels, mode, params):
             for num in range(params['num_patches']):
                 length = params['patch_scale']**(num+1)*params['patch_size']
                 patches.append(
-                    tf.image.extract_glimpse(
-                        images,
-                        [length, length],
-                        locs)
+                    tf.image.resize_images(
+                        tf.image.extract_glimpse(
+                            images,
+                            [length, length],
+                            locs),
+                        [params['patch_size'], params['patch_size']]
+                    )
                 )
         return tf.stack(patches, axis=1)
 
