@@ -40,7 +40,7 @@ def ffnn(config, run_config):
             'feature_columns': img_feature_columns,
             'layers': [
                 {'units': 128,
-                 'activation': tf.nn.elu,
+                 'activation': tf.nn.relu,
                  'dropout': None}]*2,
             'num_classes': config['num_classes']})
 
@@ -113,6 +113,8 @@ def ram(config, run_config):
             'img_feature_name': config['img_feature_name'],
             'img_size': config['img_size'],
             'patch_size': 12,  # TODO: random search?
+            'patch_scale': 2,
+            'num_patches': 4,
             'g_size': 128,
             'l_size': 128,
             'glimpse_out_size': 256,

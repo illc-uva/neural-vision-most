@@ -161,20 +161,27 @@ def ram_model_fn(features, labels, mode, params):
     # retina
     def retina(images, locs, scope='retina'):
         # TODO: more than one resolution!
+        patches = []
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-            return tf.image.extract_glimpse(
-                images,
-                [params['patch_size'], params['patch_size']],
-                locs)
+            for num in range(params['num_patches']):
+                length = params['patch_scale']**(num+1)*params['patch_size']
+                patches.append(
+                    tf.image.extract_glimpse(
+                        images,
+                        [length, length],
+                        locs)
+                )
+        return tf.stack(patches, axis=1)
 
     # glimpse network
     def glimpse_network(images, locs, scope='glimpse_network'):
-        # -- patches: [batch_size, patch_size, patch_size, 3]
+        # -- patches: [batch_size, num_patches, patch_size, patch_size, 3]
         patches = retina(images, locs)
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-            patches = tf.reshape(patches,
-                                 [tf.shape(patches)[0],
-                                  params['patch_size']**2*3])
+            patches = tf.reshape(
+                patches,
+                [tf.shape(patches)[0],
+                 params['num_patches']*params['patch_size']**2*3])
 
             hidden_sensor_layer = tf.layers.dense(
                     inputs=patches,
