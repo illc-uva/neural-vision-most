@@ -28,7 +28,7 @@ def parse_file(filename, label, key, img_size, num_channels):
     image = tf.to_float(
         tf.image.decode_png(image_string, channels=num_channels))
     image.set_shape([img_size, img_size, num_channels])
-    return {key: image}, label
+    return {key: image, 'filename': filename}, label
 
 
 def most(colors_dict, main_color):
@@ -41,10 +41,14 @@ def most_blue(colors_dict):
     return most(colors_dict, 'b')
 
 
+def extract_color_dict(filename, colors=['y', 'b']):
+    strings = filename.split('_')
+    return {s[0]: int(s[1:]) for s in strings if s[0] in colors}
+
+
 def label_from_filename(filename, colors=['y', 'b'],
                         eval_fn=most_blue):
-    strings = filename.split('_')
-    colors_dict = {s[0]: int(s[1:]) for s in strings if s[0] in colors}
+    colors_dict = extract_color_dict(filename, colors)
     return eval_fn(colors_dict)
 
 
