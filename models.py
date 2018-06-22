@@ -164,7 +164,7 @@ def ram_model_fn(features, labels, mode, params):
         patches = []
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
             for num in range(params['num_patches']):
-                length = params['patch_scale']**num*params['patch_size']
+                length = (params['patch_scale']**num)*params['patch_size']
                 patches.append(
                     tf.image.resize_images(
                         tf.image.extract_glimpse(
