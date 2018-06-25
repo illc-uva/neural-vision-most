@@ -152,6 +152,7 @@ def cnn(config, run_config):
             'img_feature_name': config['img_feature_name'],
             'layers': architecture['layers'],
             'dense': architecture['dense'],
+            'learning_rate': config['learning_rate'],
             'num_classes': config['num_classes']})
 
 
