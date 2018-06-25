@@ -47,15 +47,17 @@ def ffnn(config):
 
 if __name__ == '__main__':
 
-    ray.init()
-    tune.register_trainable('run', run.run)
-
     parser = argparse.ArgumentParser()
+    # general
     parser.add_argument('--exp', help='name of exp to run', type=str,
                         choices=['ffnn', 'cnn', 'ram'], default='ram')
+    parser.add_argument('--num_gpus', help='how many gpus for exp', type=int,
+                        default=0)
     # file system
     parser.add_argument('--out_path', help='path to outputs', type=str,
                         default='/tmp')
+    # NOTE: these should be absolute path names since ray moves working
+    # directory under the hood.  Don't use relative path names!
     parser.add_argument('--train_images', help='regex to path of test images',
                         type=str, default='images/train/*.png')
     parser.add_argument('--test_images', help='regex to path of test images',
@@ -81,4 +83,8 @@ if __name__ == '__main__':
                         default=2)
 
     args = parser.parse_args()
+
+    ray.init(num_gpus=args.num_gpus)
+    tune.register_trainable('run', run.run)
+
     globals()[args.exp](args.__dict__)
