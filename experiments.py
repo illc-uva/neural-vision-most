@@ -40,6 +40,7 @@ def ffnn(config):
     tune.run_experiments({
         'ffnn_experiment': {
             'run': 'run',
+            'local_dir': config['ray_path'],
             'config': config
         }
     })
@@ -55,6 +56,8 @@ if __name__ == '__main__':
                         default=0)
     # file system
     parser.add_argument('--out_path', help='path to outputs', type=str,
+                        default='/tmp')
+    parser.add_argument('--ray_path', help='path to ray outputs', type=str,
                         default='/tmp')
     # NOTE: these should be absolute path names since ray moves working
     # directory under the hood.  Don't use relative path names!
