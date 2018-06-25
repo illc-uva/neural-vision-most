@@ -36,9 +36,26 @@ def ffnn(config):
         {'units': spec.config.units,
          # 'activation': tf.nn.relu,
          'dropout': spec.config.dropout}]*spec.config.num_layers)
-    print(config)
     tune.run_experiments({
         'ffnn_experiment': {
+            'run': 'run',
+            'local_dir': config['ray_path'],
+            'config': config
+        }
+    })
+
+
+def cnn(config):
+    config['model'] = 'cnn'
+    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 5e-3, 1e-4])
+    config['cnn_architecture'] = tune.grid_search(['vgg11', 'vgg13'])
+    config['dropout'] = tune.grid_search([0.1, 0.25])
+    config['trial_name'] = lambda spec: '_'.join(
+        [key + '-' + str(spec.config[key]) for key in ['learning_rate',
+                                                       'dropout',
+                                                       'cnn_architecture']])
+    tune.run_experiments({
+        'cnn_experiment': {
             'run': 'run',
             'local_dir': config['ray_path'],
             'config': config

@@ -95,7 +95,51 @@ def cnn(config, run_config):
             'dense': [
                 {'units': 4096,
                  'activation': tf.nn.relu,
-                 'rate': 0.2}
+                 'rate': config['dropout']}
+            ]*2
+        },
+        'vgg13': {
+            'layers': [
+                {'num_convs': 2,
+                 'filters': 64,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 128,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 256,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 512,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 512,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+            ],
+            'dense': [
+                {'units': 4096,
+                 'activation': tf.nn.relu,
+                 'rate': config['dropout']}
             ]*2
         }
     }

@@ -129,7 +129,7 @@ def cnn_model_fn(features, labels, mode, params):
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        optimizer = tf.train.AdamOptimizer(params['learning_rate'])
         train_op = optimizer.minimize(
             loss=loss,
             global_step=tf.train.get_global_step())
