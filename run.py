@@ -17,7 +17,9 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import argparse
+import os
 from distutils import dir_util
+from collections import defaultdict
 import tensorflow as tf
 import data
 import models
@@ -32,16 +34,21 @@ def ffnn(config, run_config):
             config['img_feature_name'],
             shape=[config['img_size'], config['img_size'],
                    config['num_channels']])]
+    # hack because I can't figure out how to pass activation via ray_tune
+    if config['layers']:
+        for layer in config['layers']:
+            layer['activation'] = tf.nn.relu
     return tf.estimator.Estimator(
         models.ffnn_model_fn,
         model_dir=config['model_dir'],
         config=run_config,
         params={
             'feature_columns': img_feature_columns,
-            'layers': [
+            'layers': config['layers'] or [
                 {'units': 128,
                  'activation': tf.nn.relu,
                  'dropout': None}]*2,
+            'learning_rate': config['learning_rate'] or 0.01,
             'num_classes': config['num_classes']})
 
 
@@ -134,11 +141,15 @@ def run(config, reporter=None):
         save_checkpoints_steps=150,
         keep_checkpoint_max=3
     )
+    # make config return default value None for all keys, so that methods can
+    # set default arguments using `or`
+    config = defaultdict(lambda: None, config)
 
-    # Create the Estimator, using --model arg (default ram)
     # TODO: make model_dir more robustly named for hyperparam experiments?
-    model_dir = config['out_path'] + '/' + config['model']
+    model_dir = (config['out_path'] + '/' + config['model'] + '/' +
+                 (config['trial_name'] or ''))
     config['model_dir'] = model_dir
+    # Create the Estimator, using --model arg (default ram)
     model = globals()[config['model']](config, save_runconfig)
 
     # prep eval storage
@@ -149,10 +160,14 @@ def run(config, reporter=None):
     best_model_dir = model_dir + '_best'
     dir_util.mkpath(best_model_dir)
 
+    print('CURRENT DIR:')
+    print(os.getcwd())
+
     for step in range(config['num_epochs'] // config['epochs_per_eval']):
 
         # TODO: can these input_fn's be outside the loop?
         def train_input_fn():
+            print(config['train_images'])
             return data.make_dataset(config['train_images'],
                                      config['img_feature_name'],
                                      config['img_size'],
@@ -188,7 +203,9 @@ def run(config, reporter=None):
 
         if reporter:
             # for ray_tune
-            pass
+            reporter(timesteps_total=eval_results['global_step'],
+                     mean_accuracy=eval_results['accuracy'],
+                     loss=eval_results['loss'])
 
         if patience_steps < step + 1:
             if cur_loss > eval_dicts[-patience_steps]['loss']:

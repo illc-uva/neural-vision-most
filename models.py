@@ -56,7 +56,7 @@ def ffnn_model_fn(features, labels, mode, params):
     # loss and training
     loss = tf.losses.sparse_softmax_cross_entropy(labels, logits)
     # TODO: parameterize optimizer?
-    optimizer = tf.train.RMSPropOptimizer(0.001)
+    optimizer = tf.train.AdamOptimizer(params['learning_rate'])
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
 
     accuracy = tf.metrics.accuracy(labels=labels,
@@ -245,7 +245,6 @@ def ram_model_fn(features, labels, mode, params):
         if params['core_type'] == 'LSTM':
             rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
             state = rnn_cell.zero_state(batch_size, tf.float32)
-
         else:
             def rnn_cell(glimpse, state):
 
