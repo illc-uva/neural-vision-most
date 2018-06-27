@@ -247,7 +247,7 @@ def run(config, reporter=None):
             lowest_val_loss = cur_loss
 
         if patience_steps < step + 1:
-            if cur_loss > eval_dicts[-patience_steps]['loss']:
+            if cur_loss > eval_dicts[-(patience_steps+1)]['loss']:
                 print('No improvement over {} epochs; ending training.'.format(
                     config['patience']))
                 break
