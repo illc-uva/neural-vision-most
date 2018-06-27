@@ -19,8 +19,6 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
 import argparse
 import itertools
 import multiprocessing
-import ray
-import ray.tune as tune
 import run
 
 
@@ -45,35 +43,20 @@ def run_experiment(model, config, **kwargs):
     trial_configs = [dict(trial_dict, **config)
                      for trial_dict in trial_configs]
     # run pool of trials
-    with multiprocessing.Pool(config['num_cpus']) as pool:
-        pool.map(run.run, trial_configs)
+    pool = multiprocessing.Pool(config['num_cpus'])
+    pool.map(run.run, trial_configs)
 
 
 def ffnn(config):
-    config['model'] = 'ffnn'
-    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 1e-4])
-    config['dropout'] = tune.grid_search([0.1, 0.25, 0.5])
-    config['num_layers'] = tune.grid_search([2, 4, 8])
-    config['units'] = tune.grid_search([1024, 2048])
-    config['trial_name'] = lambda spec: '_'.join(
-        [key + '-' + str(spec.config[key]) for key in ['learning_rate',
-                                                       'dropout', 'num_layers',
-                                                       'units']])
-    config['layers'] = lambda spec: ([
-        {'units': spec.config.units,
-         # 'activation': tf.nn.relu,
-         'dropout': spec.config.dropout}]*spec.config.num_layers)
-    tune.run_experiments({
-        'ffnn_experiment': {
-            'run': 'run',
-            'local_dir': config['ray_path'],
-            'config': config
-        }
-    })
+    run_experiment('ffnn', config,
+                   learning_rate=[1e-2, 1e-3, 1e-4],
+                   dropout=[0.1, 0.25, 0.5],
+                   num_layers=[2, 4, 8],
+                   units=[1024, 2048],
+                   activation=['relu'])
 
 
 def cnn(config):
-
     run_experiment('cnn', config,
                    cnn_architecture=['vgg11', 'vgg13'],
                    learning_rate=[1e-2, 1e-3, 1e-4],

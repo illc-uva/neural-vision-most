@@ -17,7 +17,6 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import argparse
-import os
 from distutils import dir_util
 from collections import defaultdict
 import tensorflow as tf
@@ -34,10 +33,13 @@ def ffnn(config, run_config):
             config['img_feature_name'],
             shape=[config['img_size'], config['img_size'],
                    config['num_channels']])]
-    # hack because I can't figure out how to pass activation via ray_tune
-    if config['layers']:
-        for layer in config['layers']:
-            layer['activation'] = tf.nn.relu
+    # build layers from specification
+    if not config['layers']:
+        config['layers'] = [
+            {'units': config['units'],
+             'dropout': config['dropout'],
+             'activation': getattr(tf.nn, config['activation'])}
+        ]*config['num_layers']
     return tf.estimator.Estimator(
         models.ffnn_model_fn,
         model_dir=config['model_dir'],
