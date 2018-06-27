@@ -17,9 +17,36 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import argparse
+import itertools
+import multiprocessing
 import ray
 import ray.tune as tune
 import run
+
+
+# TODO: document this method
+# see https://stackoverflow.com/a/5228294/9370349
+def product_dict(**kwargs):
+    keys = kwargs.keys()
+    values = kwargs.values()
+    for instance in itertools.product(*values):
+        yield dict(zip(keys, instance))
+
+
+def run_experiment(model, config, **kwargs):
+
+    config['model'] = model
+    # get trial variants
+    trial_configs = list(product_dict(**kwargs))
+    for trial_config in trial_configs:
+        trial_config['trial_name'] = '_'.join(
+            [key + '-' + str(trial_config[key]) for key in trial_config])
+    # merge with fixed params
+    trial_configs = [dict(trial_dict, **config)
+                     for trial_dict in trial_configs]
+    # run pool of trials
+    with multiprocessing.Pool(config['num_cpus']) as pool:
+        pool.map(run.run, trial_configs)
 
 
 def ffnn(config):
@@ -46,21 +73,11 @@ def ffnn(config):
 
 
 def cnn(config):
-    config['model'] = 'cnn'
-    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 1e-4])
-    config['cnn_architecture'] = tune.grid_search(['vgg11', 'vgg13'])
-    config['dropout'] = tune.grid_search([0.1, 0.25])
-    config['trial_name'] = lambda spec: '_'.join(
-        [key + '-' + str(spec.config[key]) for key in ['learning_rate',
-                                                       'dropout',
-                                                       'cnn_architecture']])
-    tune.run_experiments({
-        'cnn_experiment': {
-            'run': 'run',
-            'local_dir': config['ray_path'],
-            'config': config
-        }
-    })
+
+    run_experiment('cnn', config,
+                   cnn_architecture=['vgg11', 'vgg13'],
+                   learning_rate=[1e-2, 1e-3, 1e-4],
+                   dropout=[0.1, 0.25])
 
 
 if __name__ == '__main__':
@@ -69,12 +86,10 @@ if __name__ == '__main__':
     # general
     parser.add_argument('--exp', help='name of exp to run', type=str,
                         choices=['ffnn', 'cnn', 'ram'], default='ram')
-    parser.add_argument('--num_gpus', help='how many gpus for exp', type=int,
-                        default=0)
+    parser.add_argument('--num_cpus', help='how many gpus for exp', type=int,
+                        default=12)
     # file system
     parser.add_argument('--out_path', help='path to outputs', type=str,
-                        default='/tmp')
-    parser.add_argument('--ray_path', help='path to ray outputs', type=str,
                         default='/tmp')
     # NOTE: these should be absolute path names since ray moves working
     # directory under the hood.  Don't use relative path names!
@@ -103,8 +118,5 @@ if __name__ == '__main__':
                         default=2)
 
     args = parser.parse_args()
-
-    ray.init(num_gpus=args.num_gpus)
-    tune.register_trainable('run', run.run)
 
     globals()[args.exp](args.__dict__)
