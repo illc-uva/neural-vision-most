@@ -253,7 +253,7 @@ def run(config, reporter=None):
                 break
 
     # TODO: save eval_dicts as csv somewhere?
-    util.dicts_to_csv(eval_dicts, model_dir + '/eval.csv')
+    util.dicts_to_csv(eval_dicts, model_dir + '_eval.csv')
 
     print('Evaluating best model on the test set.')
 
@@ -268,7 +268,7 @@ def run(config, reporter=None):
     config['model_dir'] = best_model_dir
     model = globals()[config['model']](config, save_runconfig)
     util.dicts_to_csv([model.evaluate(input_fn=test_input_fn)],
-                      model_dir + '/eval_best.csv')
+                      model_dir + '_eval_best.csv')
 
 
 if __name__ == '__main__':
