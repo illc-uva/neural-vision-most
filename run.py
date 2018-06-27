@@ -22,6 +22,7 @@ from collections import defaultdict
 import tensorflow as tf
 import data
 import models
+import util
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -192,7 +193,6 @@ def run(config, reporter=None):
     # set default arguments using `or`
     config = defaultdict(lambda: None, config)
 
-    # TODO: make model_dir more robustly named for hyperparam experiments?
     model_dir = (config['out_path'] + '/' + config['model'] + '/' +
                  (config['trial_name'] or ''))
     config['model_dir'] = model_dir
@@ -246,12 +246,6 @@ def run(config, reporter=None):
             dir_util.copy_tree(model_dir, best_model_dir)
             lowest_val_loss = cur_loss
 
-        if reporter:
-            # for ray_tune
-            reporter(timesteps_total=eval_results['global_step'],
-                     mean_accuracy=eval_results['accuracy'],
-                     loss=eval_results['loss'])
-
         if patience_steps < step + 1:
             if cur_loss > eval_dicts[-patience_steps]['loss']:
                 print('No improvement over {} epochs; ending training.'.format(
@@ -259,6 +253,7 @@ def run(config, reporter=None):
                 break
 
     # TODO: save eval_dicts as csv somewhere?
+    util.dicts_to_csv(eval_dicts, model_dir + 'eval.csv')
 
     print('Evaluating best model on the test set.')
 
@@ -272,7 +267,8 @@ def run(config, reporter=None):
 
     config['model_dir'] = best_model_dir
     model = globals()[config['model']](config, save_runconfig)
-    print(model.evaluate(input_fn=test_input_fn))
+    util.dicts_to_csv([model.evaluate(input_fn=test_input_fn)],
+                      model_dir + 'eval_best.csv')
 
 
 if __name__ == '__main__':

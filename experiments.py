@@ -17,25 +17,17 @@ Copyright (c) 2018 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import argparse
-import itertools
+import util
 import multiprocessing
 import run
 
 
-# TODO: document this method
-# see https://stackoverflow.com/a/5228294/9370349
-def product_dict(**kwargs):
-    keys = kwargs.keys()
-    values = kwargs.values()
-    for instance in itertools.product(*values):
-        yield dict(zip(keys, instance))
-
-
+# TODO: generalize this to allow for random search not just grid search
 def run_experiment(model, config, **kwargs):
 
     config['model'] = model
     # get trial variants
-    trial_configs = list(product_dict(**kwargs))
+    trial_configs = list(util.product_dict(**kwargs))
     for trial_config in trial_configs:
         trial_config['trial_name'] = '_'.join(
             [key + '-' + str(trial_config[key]) for key in trial_config])
