@@ -95,7 +95,7 @@ def cnn(config, run_config):
             'dense': [
                 {'units': 4096,
                  'activation': tf.nn.relu,
-                 'rate': config['dropout']}
+                 'rate': config['dropout'] or 0.1}
             ]*2
         },
         'vgg13': {
@@ -139,7 +139,7 @@ def cnn(config, run_config):
             'dense': [
                 {'units': 4096,
                  'activation': tf.nn.relu,
-                 'rate': config['dropout']}
+                 'rate': config['dropout'] or 0.1}
             ]*2
         }
     }

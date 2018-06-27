@@ -24,7 +24,7 @@ import run
 
 def ffnn(config):
     config['model'] = 'ffnn'
-    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 5e-3, 1e-4])
+    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 1e-4])
     config['dropout'] = tune.grid_search([0.1, 0.25, 0.5])
     config['num_layers'] = tune.grid_search([2, 4, 8])
     config['units'] = tune.grid_search([1024, 2048])
@@ -47,7 +47,7 @@ def ffnn(config):
 
 def cnn(config):
     config['model'] = 'cnn'
-    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 5e-3, 1e-4])
+    config['learning_rate'] = tune.grid_search([1e-2, 1e-3, 1e-4])
     config['cnn_architecture'] = tune.grid_search(['vgg11', 'vgg13'])
     config['dropout'] = tune.grid_search([0.1, 0.25])
     config['trial_name'] = lambda spec: '_'.join(
