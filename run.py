@@ -171,9 +171,9 @@ def ram(config, run_config):
             'l_size': 128,
             'glimpse_out_size': 256,
             'loc_dim': 2,  # x, y
-            'std': 0.2,  # TODO: random search?
+            'std': 0.1,  # TODO: random search?
             'core_size': 256,
-            'num_glimpses': 12,
+            'num_glimpses': 12,  # TODO: vary glimpse number by batch
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
             'core_type': config['core_type']
@@ -205,9 +205,6 @@ def run(config, reporter=None):
     best_model_dir = model_dir + '_best'
     dir_util.mkpath(best_model_dir)
 
-    print('CURRENT DIR:')
-    print(os.getcwd())
-
     for step in range(config['num_epochs'] // config['epochs_per_eval']):
 
         # TODO: can these input_fn's be outside the loop?
@@ -226,6 +223,7 @@ def run(config, reporter=None):
                                      config['img_feature_name'],
                                      config['img_size'],
                                      config['num_channels'],
+                                     batch_size=config['batch_size'],
                                      shuffle=False)
 
         print('Training beginning.')
@@ -267,6 +265,7 @@ def run(config, reporter=None):
                                  config['img_feature_name'],
                                  config['img_size'],
                                  config['num_channels'],
+                                 batch_size=config['batch_size'],
                                  shuffle=False)
 
     config['model_dir'] = best_model_dir
