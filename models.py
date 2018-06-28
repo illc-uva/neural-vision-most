@@ -446,7 +446,7 @@ def ram_model_fn(features, labels, mode, params):
         """
 
         # TODO: parameterize optimizer
-        optimizer = tf.train.AdamOptimizer(1e-5)
+        optimizer = tf.train.AdamOptimizer(params['learning_rate'])
         train_op = optimizer.apply_gradients(
             grads_and_vars,
             global_step=tf.train.get_global_step())

@@ -55,6 +55,18 @@ def cnn(config):
                    dropout=[0.1, 0.25])
 
 
+def ram(config):
+    run_experiment('ram', config,
+                   learning_rate=[1e-4, 1e-5],
+                   patch_size=[12],
+                   num_patches=[2, 4],
+                   glimpse_size=[128, 256],
+                   glimpse_out_size=[256],
+                   core_size=[256, 512],
+                   num_glimpses=[8, 16, 24],
+                   core_type=['LSTM', 'RAMcell'])
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()

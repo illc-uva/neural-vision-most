@@ -167,16 +167,17 @@ def ram(config, run_config):
         params={
             'img_feature_name': config['img_feature_name'],
             'img_size': config['img_size'],
-            'patch_size': 12,  # TODO: random search?
+            'patch_size': config['patch_size'] or 12,  # TODO: random search?
             'patch_scale': 2,
-            'num_patches': 4,
-            'g_size': 128,
-            'l_size': 128,
-            'glimpse_out_size': 256,
+            'num_patches': config['num_patches'] or 4,
+            'g_size': config['glimpse_size'] or 128,
+            'l_size': config['glimpse_size'] or 128,
+            'glimpse_out_size': config['glimpse_out_size'] or 256,
             'loc_dim': 2,  # x, y
             'std': 0.1,  # TODO: random search?
-            'core_size': 256,
-            'num_glimpses': 12,  # TODO: vary glimpse number by batch
+            'core_size': config['core_size'] or 256,
+            'num_glimpses': config['num_glimpses'] or 12,  # TODO: vary glimpse number by batch
+            'learning_rate': config['learning_rate'] or 1e-3,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
             'core_type': config['core_type']
