@@ -35,6 +35,9 @@ Usage as follows:
         four fields: x, y, radius, and color
     * the method `make_image` takes such a list of `Dot`s and then
         generates and saves an image to disk
+    * the method `make_batch` takes a list of trial types, a list of of
+        `colors_dict`s, and a number N, and produces N images of each
+        trial_type, color_dict pair
 """
 
 from collections import namedtuple
