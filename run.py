@@ -174,10 +174,10 @@ def ram(config, run_config):
             'l_size': config['glimpse_size'] or 128,
             'glimpse_out_size': config['glimpse_out_size'] or 256,
             'loc_dim': 2,  # x, y
-            'std': 0.1,  # TODO: random search?
+            'std': 0.03,  # TODO: random search?
             'core_size': config['core_size'] or 256,
             'num_glimpses': config['num_glimpses'] or 12,  # TODO: vary glimpse number by batch
-            'learning_rate': config['learning_rate'] or 1e-3,
+            'learning_rate': config['learning_rate'] or 1e-5,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
             'core_type': config['core_type']
@@ -187,8 +187,7 @@ def ram(config, run_config):
 def run(config, reporter=None):
 
     save_runconfig = tf.estimator.RunConfig(
-        save_checkpoints_steps=150,
-        keep_checkpoint_max=3
+        keep_checkpoint_max=1
     )
     # make config return default value None for all keys, so that methods can
     # set default arguments using `or`
