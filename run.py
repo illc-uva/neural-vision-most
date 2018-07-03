@@ -169,18 +169,19 @@ def ram(config, run_config):
             'img_size': config['img_size'],
             'patch_size': config['patch_size'] or 12,  # TODO: random search?
             'patch_scale': 2,
-            'num_patches': config['num_patches'] or 4,
-            'g_size': config['glimpse_size'] or 128,
-            'l_size': config['glimpse_size'] or 128,
+            'num_patches': config['num_patches'] or 2,
+            'g_size': config['glimpse_size'] or 256,
+            'l_size': config['glimpse_size'] or 256,
             'glimpse_out_size': config['glimpse_out_size'] or 256,
             'loc_dim': 2,  # x, y
             'std': 0.03,  # TODO: random search?
-            'core_size': config['core_size'] or 256,
+            'core_size': config['core_size'] or 512,
             'num_glimpses': config['num_glimpses'] or 12,  # TODO: vary glimpse number by batch
-            'learning_rate': config['learning_rate'] or 1e-5,
+            'learning_rate': config['learning_rate'] or 1e-3,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
-            'core_type': config['core_type']
+            'core_type': config['core_type'] or 'LSTM',
+            'glimpse_type': config['glimpse_type'] or 'CNN'
             })
 
 
@@ -211,7 +212,6 @@ def run(config, reporter=None):
 
         # TODO: can these input_fn's be outside the loop?
         def train_input_fn():
-            print(config['train_images'])
             return data.make_dataset(config['train_images'],
                                      config['img_feature_name'],
                                      config['img_size'],
@@ -308,6 +308,8 @@ if __name__ == '__main__':
                         default=2)
     parser.add_argument('--core_type', help='type of RNN', type=str,
                         default='LSTM')
+    parser.add_argument('--glimpse_type', help='type of glimpse net', type=str,
+                        default='CNN')
     parser.add_argument('--cnn_architecture', help='architecture for CNN',
                         type=str, default=None)
     # get all args

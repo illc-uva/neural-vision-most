@@ -174,46 +174,59 @@ def ram_model_fn(features, labels, mode, params):
                         [params['patch_size'], params['patch_size']]
                     )
                 )
-        return tf.stack(patches, axis=1)
+        return tf.concat(patches, axis=1)
 
     # glimpse network
-    def glimpse_network(images, locs, scope='glimpse_network'):
-        # -- patches: [batch_size, num_patches, patch_size, patch_size, 3]
-        patches = retina(images, locs)
-        with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-            patches = tf.reshape(
-                patches,
-                [tf.shape(patches)[0],
-                 params['num_patches']*params['patch_size']**2*3])
+    if params['glimpse_type'] == 'CNN':
+        def glimpse_network(images, locs, scope='glimpse_network'):
+            # -- patches: [batch_size, patch_size * num_patches, patch_size, 3]
+            patches = retina(images, locs)
+            net = tf.layers.conv2d(patches, 64, 5)
+            net = tf.layers.conv2d(net, 64, 3)
+            net = tf.layers.conv2d(net, 128, 3)
+            net = tf.reshape(net, [tf.shape(patches)[0],
+                                   np.prod(net.shape[1:])])
+            return tf.layers.dense(net,
+                                   units=params['glimpse_out_size'],
+                                   activation=tf.nn.relu)
+    else:
+        def glimpse_network(images, locs, scope='glimpse_network'):
+            # -- patches: [batch_size, patch_size * num_patches, patch_size, 3]
+            patches = retina(images, locs)
+            with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
+                patches = tf.reshape(
+                    patches,
+                    [tf.shape(patches)[0],
+                     params['num_patches']*params['patch_size']**2*3])
 
-            hidden_sensor_layer = tf.layers.dense(
-                    inputs=patches,
-                    units=params['g_size'],
-                    activation=tf.nn.relu)
+                hidden_sensor_layer = tf.layers.dense(
+                        inputs=patches,
+                        units=params['g_size'],
+                        activation=tf.nn.relu)
 
-            dense_sensor_layer = tf.layers.dense(
-                    inputs=hidden_sensor_layer,
-                    units=params['g_size'],
-                    activation=None)
+                dense_sensor_layer = tf.layers.dense(
+                        inputs=hidden_sensor_layer,
+                        units=params['g_size'],
+                        activation=None)
 
-            hidden_location_layer = tf.layers.dense(
-                    inputs=locs,
-                    units=params['l_size'],
-                    activation=tf.nn.relu)
+                hidden_location_layer = tf.layers.dense(
+                        inputs=locs,
+                        units=params['l_size'],
+                        activation=tf.nn.relu)
 
-            dense_location_layer = tf.layers.dense(
-                    inputs=hidden_location_layer,
-                    units=params['l_size'],
-                    activation=None)
+                dense_location_layer = tf.layers.dense(
+                        inputs=hidden_location_layer,
+                        units=params['l_size'],
+                        activation=None)
 
-            glimpse_out_layer = tf.layers.dense(
-                    inputs=tf.add(
-                            x=dense_sensor_layer,
-                            y=dense_location_layer),
-                    units=params['glimpse_out_size'],
-                    activation=tf.nn.relu)
+                glimpse_out_layer = tf.layers.dense(
+                        inputs=tf.add(
+                                x=dense_sensor_layer,
+                                y=dense_location_layer),
+                        units=params['glimpse_out_size'],
+                        activation=tf.nn.relu)
 
-            return glimpse_out_layer
+                return glimpse_out_layer
 
     # location_network
     # TODO: make std a param, or learnable?
@@ -273,11 +286,10 @@ def ram_model_fn(features, labels, mode, params):
 
     # get initial location, glimpses, and state
 
-    # TODO: initial loc as a separate network?
     # -- locs: [None, loc_dim]
-    locs = tf.random_uniform(
-        [batch_size, params['loc_dim']],
-        minval=-1., maxval=1.)
+    # zeros are like fixating at center of screen in experiments
+    locs = tf.zeros(
+        [batch_size, params['loc_dim']])
 
     # set up the main loop, for sampling locations and extracting glimpses
     is_training = mode == tf.estimator.ModeKeys.TRAIN
