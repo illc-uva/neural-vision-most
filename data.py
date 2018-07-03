@@ -23,10 +23,13 @@ import tensorflow as tf
 # tf.enable_eager_execution()
 
 
-def parse_file(filename, label, key, img_size, num_channels):
+def parse_file(filename, label, key, img_size, num_channels, grayscale=True):
     image_string = tf.read_file(filename)
     image = tf.to_float(
         tf.image.decode_png(image_string, channels=num_channels))
+    if grayscale:
+        image = tf.image.rgb_to_grayscale(image)
+        num_channels = 1
     image.set_shape([img_size, img_size, num_channels])
     return {key: image, 'filename': filename}, label
 
