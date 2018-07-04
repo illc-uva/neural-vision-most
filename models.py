@@ -181,15 +181,21 @@ def ram_model_fn(features, labels, mode, params):
         def glimpse_network(images, locs, scope='glimpse_network'):
             # -- patches: [batch_size, patch_size * num_patches, patch_size, 3]
             patches = retina(images, locs)
+            # TODO: integrate location in this glimpse net!!
             with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
                 net = tf.layers.conv2d(patches, 64, 5)
                 net = tf.layers.conv2d(net, 64, 3)
                 net = tf.layers.conv2d(net, 128, 3)
                 net = tf.reshape(net, [tf.shape(patches)[0],
                                        np.prod(net.shape[1:])])
-                return tf.layers.dense(net,
+                what = tf.layers.dense(net,
                                        units=params['glimpse_out_size'],
                                        activation=tf.nn.relu)
+                where = tf.layers.dense(
+                    inputs=locs,
+                    units=params['glimpse_out_size'],
+                    activation=tf.nn.relu)
+                return what*where
     else:
         def glimpse_network(images, locs, scope='glimpse_network'):
             # -- patches: [batch_size, patch_size * num_patches, patch_size, 3]
@@ -221,7 +227,8 @@ def ram_model_fn(features, labels, mode, params):
                         activation=None)
 
                 glimpse_out_layer = tf.layers.dense(
-                        inputs=tf.add(
+                        # TODO: is multiply better than add?
+                        inputs=tf.multiply(
                                 x=dense_sensor_layer,
                                 y=dense_location_layer),
                         units=params['glimpse_out_size'],
