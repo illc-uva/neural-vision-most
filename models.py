@@ -230,15 +230,18 @@ def ram_model_fn(features, labels, mode, params):
                 return glimpse_out_layer
 
     # location_network
-    # TODO: make std a param, or learnable?
     def location_network(rnn_state, sampling, std=params['std'],
                          scope='location_network'):
         with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-            # TODO: Lewis implements Location Network here
             # tanh to force [-1, 1] values
             core_net_output = tf.stop_gradient(rnn_state)
-            means = tf.layers.dense(core_net_output, params['loc_dim'],
-                                    activation=tf.tanh)
+            # core_net_output = rnn_state
+            means = tf.clip_by_value(
+                tf.layers.dense(
+                    core_net_output, params['loc_dim'],
+                    kernel_initializer=tf.glorot_normal_initializer(),
+                    activation=None),
+                -1., 1.)
 
             if sampling:
                 # clip to force [-1, 1] values
@@ -247,17 +250,19 @@ def ram_model_fn(features, labels, mode, params):
                         [tf.shape(rnn_state)[0], params['loc_dim']],
                         stddev=std),
                     -1., 1.)
-                locs = tf.stop_gradient(locs)
             else:
                 locs = means
 
+            locs = tf.stop_gradient(locs)
             return locs, means
 
     # core network
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
         if params['core_type'] == 'LSTM':
-            rnn_cell = tf.nn.rnn_cell.LSTMCell(params['core_size'])
+            rnn_cell = tf.nn.rnn_cell.LSTMCell(
+                params['core_size'],
+                initializer=tf.glorot_normal_initializer())
             state = rnn_cell.zero_state(batch_size, tf.float32)
         else:
             def rnn_cell(glimpse, state):
@@ -340,6 +345,7 @@ def ram_model_fn(features, labels, mode, params):
         return tf.transpose(tensor, perm=[1, 0, 2])
     # [batch_size, num_glimpses, loc_dim]
     locs = ta_to_batch_major(locs_ta)
+    tf.summary.histogram('locs_hist', locs)
     # [batch_size, num_glimpses, loc_dim]
     loc_means = ta_to_batch_major(loc_means_ta)
     # [batch_size, num_glimpses, core_size]
@@ -367,9 +373,8 @@ def ram_model_fn(features, labels, mode, params):
     # losses
     with tf.variable_scope('losses'):
         # classification loss
-        class_loss = tf.reduce_mean(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=labels, logits=logits))
+        class_loss = tf.losses.sparse_softmax_cross_entropy(
+                labels=labels, logits=logits)
 
         # reinforce loss for location
         def log_likelihood(means, locs, std):
@@ -421,6 +426,7 @@ def ram_model_fn(features, labels, mode, params):
         # NOTE: the block below is a direct way of training location and core
         # networks separately; I'm fairly confident that the total loss with
         # stop_gradients as implemented further below also works
+        """
         loc_net_vars = [var for var in variables if 'location_network' in
                         var.name]
         core_net_vars = [var for var in variables if var not in loc_net_vars]
@@ -446,17 +452,20 @@ def ram_model_fn(features, labels, mode, params):
         # TODO: does this total_loss, with appropriate stop_gradient in
         # location_network, work the same as the above method of explicitly
         # training the two networks separately?
-
         total_loss = (class_loss + reinforce_loss +
                       # train baseline here, to approximate expected reward, of
                       # which reward is an unbiased estimator
                       tf.losses.mean_squared_error(baselines,
                                                    tf.stop_gradient(reward)))
         gradients = tf.gradients(total_loss, variables)
+        for grad, var in zip(gradients, variables):
+            tf.summary.histogram('gradient/' + var.name, grad)
+        # NOTE: try just back-propagating class loss, thanks to
+        # re-parameterization of sampling
+        # gradients = tf.gradients(class_loss, variables)
         gradients, _ = tf.clip_by_global_norm(gradients,
                                               params['max_grad_norm'])
         grads_and_vars = zip(gradients, variables)
-        """
 
         # TODO: parameterize optimizer
         optimizer = tf.train.AdamOptimizer(params['learning_rate'])

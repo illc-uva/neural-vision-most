@@ -177,7 +177,7 @@ def ram(config, run_config):
             'std': 0.03,  # TODO: random search?
             'core_size': config['core_size'] or 512,
             'num_glimpses': config['num_glimpses'] or 12,  # TODO: vary glimpse number by batch
-            'learning_rate': config['learning_rate'] or 1e-3,
+            'learning_rate': config['learning_rate'] or 1e-5,
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
             'core_type': config['core_type'] or 'LSTM',
@@ -185,7 +185,7 @@ def ram(config, run_config):
             })
 
 
-def run(config, reporter=None):
+def run(config):
 
     save_runconfig = tf.estimator.RunConfig(
         keep_checkpoint_max=1
@@ -205,7 +205,7 @@ def run(config, reporter=None):
     lowest_val_loss = 1e10  # big initial number
     patience_steps = config['patience'] // config['epochs_per_eval']
     # make directory for saving the best model
-    best_model_dir = model_dir + '_best'
+    best_model_dir = model_dir + 'best'
     dir_util.mkpath(best_model_dir)
 
     for step in range(config['num_epochs'] // config['epochs_per_eval']):
@@ -253,7 +253,7 @@ def run(config, reporter=None):
                 break
 
     # TODO: save eval_dicts as csv somewhere?
-    util.dicts_to_csv(eval_dicts, model_dir + '_eval.csv')
+    util.dicts_to_csv(eval_dicts, model_dir + 'eval.csv')
 
     print('Evaluating best model on the test set.')
 
@@ -268,7 +268,7 @@ def run(config, reporter=None):
     config['model_dir'] = best_model_dir
     model = globals()[config['model']](config, save_runconfig)
     util.dicts_to_csv([model.evaluate(input_fn=test_input_fn)],
-                      model_dir + '_eval_best.csv')
+                      model_dir + 'eval_best.csv')
 
 
 if __name__ == '__main__':
@@ -310,6 +310,8 @@ if __name__ == '__main__':
                         default='LSTM')
     parser.add_argument('--glimpse_type', help='type of glimpse net', type=str,
                         default='CNN')
+    parser.add_argument('--num_glimpses', help='type of glimpse net', type=int,
+                        default=4)
     parser.add_argument('--cnn_architecture', help='architecture for CNN',
                         type=str, default=None)
     # get all args

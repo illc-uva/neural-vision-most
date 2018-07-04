@@ -243,22 +243,29 @@ def make_image(file_name, dots, num_pixels=256):
     ax.set_xticks([])
     ax.set_yticks([])
     plt.tight_layout(pad=0)
+    # TODO: mkdir for file_name if not exists...
     fig.savefig(file_name, facecolor='grey', pad_inches=0)
 
 
-def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.'):
+def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.',
+               num_pixels=256, min_radius=1, max_radius=5):
 
     for trial_type in trial_types:
         image_method = globals()[trial_type]
         for dict_idx in range(len(color_dicts)):
             color_dict = color_dicts[dict_idx]
             for idx in range(num_per_dict):
-                make_image('{}/{}_{}_{}_{}.png'.format(
-                    out_dir, trial_type,
-                    '_'.join([str(key) + str(color_dict[key])
-                              for key in color_dict]),
-                    idx, dict_idx),
-                    image_method(color_dict))
+                make_image(
+                    '{}/{}_{}_{}_{}.png'.format(
+                        out_dir, trial_type,
+                        '_'.join([str(key) + str(color_dict[key])
+                                  for key in color_dict]),
+                        idx, dict_idx),
+                    image_method(color_dict,
+                                 num_pixels=num_pixels,
+                                 min_radius=min_radius,
+                                 max_radius=max_radius),
+                    num_pixels=num_pixels)
 
 
 def dicts_from_ratios(ratios, dicts_per_ratio,
@@ -282,12 +289,15 @@ if __name__ == '__main__':
     imgs_per_ratio = 100
     trial_types = ['scattered_random', 'scattered_pairs',
                    'column_pairs_mixed', 'column_pairs_sorted']
-    color_dicts = dicts_from_ratios(ratios, imgs_per_ratio)
+    color_dicts = dicts_from_ratios(ratios, imgs_per_ratio, dot_range=(5, 12))
     # TODO: refactor this to get proper # imgs per bin
 
     # make training set
-    make_batch(trial_types, color_dicts, 5, 'images/train')
+    make_batch(trial_types, color_dicts, 5, 'images/small/train',
+               num_pixels=128, min_radius=2, max_radius=4)
     # make val set
-    make_batch(trial_types, color_dicts, 1, 'images/val')
+    make_batch(trial_types, color_dicts, 1, 'images/small/val',
+               num_pixels=128, min_radius=2, max_radius=4)
     # make test set
-    make_batch(trial_types, color_dicts, 1, 'images/test')
+    make_batch(trial_types, color_dicts, 1, 'images/small/test',
+               num_pixels=128, min_radius=2, max_radius=4)
