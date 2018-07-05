@@ -277,13 +277,6 @@ def ram_model_fn(features, labels, mode, params):
                 params['core_size'],
                 initializer=tf.glorot_normal_initializer())
             state = rnn_cell.zero_state(batch_size, tf.float32)
-            if is_training:
-                rnn_cell = tf.nn.rnn_cell.DropoutWrapper(
-                    rnn_cell,
-                    # TODO: three diff probs?
-                    output_keep_prob=params['core_drop'],
-                    state_keep_prob=params['core_drop'],
-                    input_keep_prob=params['core_drop'])
         else:
             def rnn_cell(glimpse, state):
 
@@ -333,13 +326,20 @@ def ram_model_fn(features, labels, mode, params):
     def body(t, state, locs, outputs_ta, locs_ta, loc_means_ta):
 
         glimpse = glimpse_network(images, locs)
+        if is_training:
+            glimpse = tf.layers.dropout(glimpse,
+                                        rate=params['core_drop'])
 
         # run the core network
         with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
             output, new_state = rnn_cell(glimpse, state)
 
+        loc_input = new_state.c
+        if is_training:
+            loc_input = tf.layers.dropout(loc_input,
+                                          rate=params['core_drop'])
         # get new location
-        cur_locs, cur_loc_means = location_network(new_state.c, is_training)
+        cur_locs, cur_loc_means = location_network(loc_input, is_training)
         # store new values
         locs_ta = locs_ta.write(t, cur_locs)  # t+1 because of init_loc
         loc_means_ta = loc_means_ta.write(t, cur_loc_means)
