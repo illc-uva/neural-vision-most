@@ -296,6 +296,8 @@ if __name__ == '__main__':
                         type=int, default=1)
     parser.add_argument('--patience', help='how many epochs w/o improvement',
                         type=int, default=10)
+    parser.add_argument('--learning_rate', help='learning rate', type=float,
+                        default=1e-5)
     # model arguments
     # NOTE: for now, most parameters specifically for the models are defined in
     # the respective methods, not passed through the command-line
