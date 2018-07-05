@@ -181,6 +181,7 @@ def ram(config, run_config):
             'num_classes': config['num_classes'],
             'max_grad_norm': 5.0,
             'core_type': config['core_type'] or 'LSTM',
+            'core_drop': 0.8,
             'glimpse_type': config['glimpse_type'] or 'CNN'
             })
 

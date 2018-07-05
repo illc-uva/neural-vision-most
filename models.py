@@ -229,6 +229,7 @@ def ram_model_fn(features, labels, mode, params):
                         units=params['l_size'],
                         activation=None)
 
+                """
                 glimpse_out_layer = tf.layers.dense(
                         # TODO: is multiply better than add?
                         inputs=tf.multiply(
@@ -236,6 +237,8 @@ def ram_model_fn(features, labels, mode, params):
                                 y=dense_location_layer),
                         units=params['glimpse_out_size'],
                         activation=tf.nn.relu)
+                """
+                glimpse_out_layer = dense_sensor_layer * dense_location_layer
 
                 return glimpse_out_layer
 
@@ -267,7 +270,6 @@ def ram_model_fn(features, labels, mode, params):
             return locs, means
 
     # core network
-    # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
         if params['core_type'] == 'LSTM':
             # TODO: dropout here?
@@ -278,7 +280,9 @@ def ram_model_fn(features, labels, mode, params):
             if is_training:
                 rnn_cell = tf.nn.rnn_cell.DropoutWrapper(
                     rnn_cell,
+                    # TODO: three diff probs?
                     output_keep_prob=params['core_drop'],
+                    state_keep_prob=params['core_drop'],
                     input_keep_prob=params['core_drop'])
         else:
             def rnn_cell(glimpse, state):
