@@ -155,6 +155,9 @@ def ram_model_fn(features, labels, mode, params):
     batch_size = tf.shape(images)[0]
     tf.summary.image('images', images, max_outputs=8)
 
+    # set up the main loop, for sampling locations and extracting glimpses
+    is_training = mode == tf.estimator.ModeKeys.TRAIN
+
     # define network components 
     # NOTE: no actual tf Variables are initialized yet!
 
@@ -181,7 +184,7 @@ def ram_model_fn(features, labels, mode, params):
         def glimpse_network(images, locs, scope='glimpse_network'):
             # -- patches: [batch_size, patch_size * num_patches, patch_size, 3]
             patches = retina(images, locs)
-            # TODO: integrate location in this glimpse net!!
+            # TODO: dropout here?
             with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
                 net = tf.layers.conv2d(patches, 64, 5)
                 net = tf.layers.conv2d(net, 64, 3)
@@ -267,10 +270,16 @@ def ram_model_fn(features, labels, mode, params):
     # TODO: parameterize rnn_cell, i.e. implement split cell from paper
     with tf.variable_scope('core_network', reuse=tf.AUTO_REUSE):
         if params['core_type'] == 'LSTM':
+            # TODO: dropout here?
             rnn_cell = tf.nn.rnn_cell.LSTMCell(
                 params['core_size'],
                 initializer=tf.glorot_normal_initializer())
             state = rnn_cell.zero_state(batch_size, tf.float32)
+            if is_training:
+                rnn_cell = tf.nn.rnn_cell.DropoutWrapper(
+                    rnn_cell,
+                    output_keep_prob=params['core_drop'],
+                    input_keep_prob=params['core_drop'])
         else:
             def rnn_cell(glimpse, state):
 
@@ -303,9 +312,6 @@ def ram_model_fn(features, labels, mode, params):
     # zeros are like fixating at center of screen in experiments
     locs = tf.zeros(
         [batch_size, params['loc_dim']])
-
-    # set up the main loop, for sampling locations and extracting glimpses
-    is_training = mode == tf.estimator.ModeKeys.TRAIN
 
     # NOTE: the use of a tf.while_loop allows extracting information by passing
     # through and concatenating to a tensor at each iteration.
@@ -417,6 +423,7 @@ def ram_model_fn(features, labels, mode, params):
         adv = reward - tf.stop_gradient(baselines)
         # final reinforce loss
         reinforce_loss = -tf.reduce_mean(logll * adv)
+        tf.summary.scalar('reinforce_loss', reinforce_loss)
 
     # evaluation mode
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -464,6 +471,8 @@ def ram_model_fn(features, labels, mode, params):
                       # which reward is an unbiased estimator
                       tf.losses.mean_squared_error(baselines,
                                                    tf.stop_gradient(reward)))
+        tf.summary.scalar('total loss', total_loss)
+
         gradients = tf.gradients(total_loss, variables)
         for grad, var in zip(gradients, variables):
             tf.summary.histogram('gradient/' + var.name, grad)
