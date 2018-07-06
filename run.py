@@ -195,68 +195,71 @@ def run(config):
     # set default arguments using `or`
     config = defaultdict(lambda: None, config)
 
-    model_dir = (config['out_path'] + '/' + config['model'] + '/' +
-                 (config['trial_name'] or ''))
-    config['model_dir'] = model_dir
-    # Create the Estimator, using --model arg (default ram)
-    model = globals()[config['model']](config, save_runconfig)
+    if config['train']:
 
-    # prep eval storage
-    eval_dicts = []
-    lowest_val_loss = 1e10  # big initial number
-    patience_steps = config['patience'] // config['epochs_per_eval']
-    # make directory for saving the best model
-    best_model_dir = model_dir + 'best'
-    dir_util.mkpath(best_model_dir)
+        model_dir = (config['out_path'] + '/' + config['model'] + '/' +
+                     (config['trial_name'] or ''))
+        config['model_dir'] = model_dir
+        # Create the Estimator, using --model arg (default ram)
+        model = globals()[config['model']](config, save_runconfig)
 
-    for step in range(config['num_epochs'] // config['epochs_per_eval']):
+        # prep eval storage
+        eval_dicts = []
+        lowest_val_loss = 1e10  # big initial number
+        patience_steps = config['patience'] // config['epochs_per_eval']
+        # make directory for saving the best model
+        best_model_dir = model_dir + 'best'
+        dir_util.mkpath(best_model_dir)
 
-        # TODO: can these input_fn's be outside the loop?
-        def train_input_fn():
-            return data.make_dataset(config['train_images'],
-                                     config['img_feature_name'],
-                                     config['img_size'],
-                                     config['num_channels'],
-                                     batch_size=config['batch_size'],
-                                     num_epochs=config['epochs_per_eval'],
-                                     shuffle=True)
+        for step in range(config['num_epochs'] // config['epochs_per_eval']):
 
-        def eval_input_fn():
-            return data.make_dataset(config['val_images'],
-                                     config['img_feature_name'],
-                                     config['img_size'],
-                                     config['num_channels'],
-                                     batch_size=config['batch_size'],
-                                     shuffle=False)
+            # TODO: can these input_fn's be outside the loop?
+            def train_input_fn():
+                return data.make_dataset(config['train_images'],
+                                         config['img_feature_name'],
+                                         config['img_size'],
+                                         config['num_channels'],
+                                         batch_size=config['batch_size'],
+                                         num_epochs=config['epochs_per_eval'],
+                                         shuffle=True)
 
-        print('Training beginning.')
-        model.train(input_fn=train_input_fn)
+            def eval_input_fn():
+                return data.make_dataset(config['val_images'],
+                                         config['img_feature_name'],
+                                         config['img_size'],
+                                         config['num_channels'],
+                                         batch_size=config['batch_size'],
+                                         shuffle=False)
 
-        print('Evaluation beginning.')
-        eval_results = model.evaluate(input_fn=eval_input_fn)
-        eval_results['num_epochs'] = (step+1) * config['epochs_per_eval']
-        eval_dicts.append(eval_results)
-        cur_loss = eval_results['loss']
-        print('Loss after epoch {}: {}'.format(
-            eval_results['num_epochs'], cur_loss))
+            print('Training beginning.')
+            model.train(input_fn=train_input_fn)
 
-        # save best model, report to ray tune, early stop, etc
-        if cur_loss < lowest_val_loss:
-            print('New best model, saving to ' + best_model_dir)
-            dir_util.remove_tree(best_model_dir, verbose=True)
-            dir_util.copy_tree(model_dir, best_model_dir)
-            lowest_val_loss = cur_loss
+            print('Evaluation beginning.')
+            eval_results = model.evaluate(input_fn=eval_input_fn)
+            eval_results['num_epochs'] = (step+1) * config['epochs_per_eval']
+            eval_dicts.append(eval_results)
+            cur_loss = eval_results['loss']
+            print('Loss after epoch {}: {}'.format(
+                eval_results['num_epochs'], cur_loss))
 
-        if patience_steps < step + 1:
-            if cur_loss > eval_dicts[-(patience_steps+1)]['loss']:
-                print('No improvement over {} epochs; ending training.'.format(
-                    config['patience']))
-                break
+            # save best model, report to ray tune, early stop, etc
+            if cur_loss < lowest_val_loss:
+                print('New best model, saving to ' + best_model_dir)
+                dir_util.remove_tree(best_model_dir, verbose=True)
+                dir_util.copy_tree(model_dir, best_model_dir)
+                lowest_val_loss = cur_loss
 
-    # TODO: save eval_dicts as csv somewhere?
-    util.dicts_to_csv(eval_dicts, model_dir + 'eval.csv')
+            if patience_steps < step + 1:
+                if cur_loss > eval_dicts[-(patience_steps+1)]['loss']:
+                    print('No improvement over {} epochs; ending training.'.format(
+                        config['patience']))
+                    break
 
-    print('Evaluating best model on the test set.')
+        util.dicts_to_csv(eval_dicts, model_dir + 'train_eval.csv')
+
+        if config['eval']:
+            print('Evaluating best model on the test set.')
+            config['model_dir'] = best_model_dir
 
     def test_input_fn():
         return data.make_dataset(config['test_images'],
@@ -266,10 +269,18 @@ def run(config):
                                  batch_size=config['batch_size'],
                                  shuffle=False)
 
-    config['model_dir'] = best_model_dir
-    model = globals()[config['model']](config, save_runconfig)
-    util.dicts_to_csv([model.evaluate(input_fn=test_input_fn)],
-                      model_dir + 'eval_best.csv')
+    if config['eval']:
+        model = globals()[config['model']](config, save_runconfig)
+        util.dicts_to_csv([model.evaluate(input_fn=test_input_fn)],
+                          model_dir + 'test_eval.csv')
+
+    if config['predict']:
+        config['model_dir'] = config['out_path']
+        model = globals()[config['model']](config, save_runconfig)
+        results = model.predict(input_fn=test_input_fn)
+        output = util.process_predictions(results, include_locs=False)
+        print(output)
+        output.to_csv(config['model_dir'] + 'test_predict.csv')
 
 
 if __name__ == '__main__':
@@ -284,6 +295,16 @@ if __name__ == '__main__':
                         type=str, default='images/test/*.png')
     parser.add_argument('--val_images', help='regex to path of test images',
                         type=str, default='images/val/*.png')
+    # what to do arguments
+    parser.add_argument('--no_train', dest='train', action='store_false')
+    parser.add_argument('--train', dest='train', action='store_true')
+    parser.set_defaults(train=True)
+    parser.add_argument('--no_eval', dest='eval', action='store_false')
+    parser.add_argument('--eval', dest='eval', action='store_true')
+    parser.set_defaults(eval=True)
+    parser.add_argument('--no_predict', dest='predict', action='store_false')
+    parser.add_argument('--predict', dest='predict', action='store_true')
+    parser.set_defaults(predict=False)
     # experiment arguments
     parser.add_argument('--img_size', help='size (one int, width and height)',
                         type=int, default=256)
