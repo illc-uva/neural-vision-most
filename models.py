@@ -116,10 +116,11 @@ def cnn_model_fn(features, labels, mode, params):
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
-        'classes': tf.argmax(input=logits, axis=1),
+        'predicted_class': tf.argmax(input=logits, axis=1),
         # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
         # `logging_hook`.
-        'probabilities': tf.nn.softmax(logits, name='softmax_tensor')
+        'probabilities': tf.nn.softmax(logits, name='softmax_tensor'),
+        'filename': features['filename']
     }
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
@@ -380,7 +381,7 @@ def ram_model_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         # collect outputs here
         outputs = {
-            'logits': logits,
+            'probabilities': tf.nn.softmax(logits),
             'predicted_class': predicted_classes,
             'locs': locs,
             'filename': features['filename'],
