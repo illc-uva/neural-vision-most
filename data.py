@@ -56,13 +56,13 @@ def label_from_filename(filename, colors=['y', 'b'],
 
 
 def make_dataset(filename_pattern, img_feature_name, img_size, num_channels,
-                 shuffle=True, batch_size=None, num_epochs=1):
+                 shuffle=True, batch_size=None, num_epochs=1, grayscale=True):
     filenames = glob.glob(filename_pattern)
     labels = [label_from_filename(filename) for filename in filenames]
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     # get image tensors
     dataset = dataset.map(lambda filename, label: parse_file(
-        filename, label, img_feature_name, img_size, num_channels))
+        filename, label, img_feature_name, img_size, num_channels, grayscale))
     # shuffle
     if shuffle:
         dataset = dataset.shuffle(len(filenames))

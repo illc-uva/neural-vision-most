@@ -221,6 +221,7 @@ def run(config):
                                          config['num_channels'],
                                          batch_size=config['batch_size'],
                                          num_epochs=config['epochs_per_eval'],
+                                         grayscale=config['grayscale'],
                                          shuffle=True)
 
             def eval_input_fn():
@@ -229,6 +230,7 @@ def run(config):
                                          config['img_size'],
                                          config['num_channels'],
                                          batch_size=config['batch_size'],
+                                         grayscale=config['grayscale'],
                                          shuffle=False)
 
             print('Training beginning.')
@@ -267,6 +269,7 @@ def run(config):
                                  config['img_size'],
                                  config['num_channels'],
                                  batch_size=config['batch_size'],
+                                 grayscale=config['grayscale'],
                                  shuffle=False)
 
     if config['eval']:
@@ -296,6 +299,9 @@ if __name__ == '__main__':
                         type=str, default='images/test/*.png')
     parser.add_argument('--val_images', help='regex to path of test images',
                         type=str, default='images/val/*.png')
+    parser.add_argument('--no_grayscale', dest='grayscale', action='store_false')
+    parser.add_argument('--grayscale', dest='grayscale', action='store_true')
+    parser.set_defaults(grayscale=True)
     # what to do arguments
     parser.add_argument('--no_train', dest='train', action='store_false')
     parser.add_argument('--train', dest='train', action='store_true')
