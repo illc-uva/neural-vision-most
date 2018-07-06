@@ -342,7 +342,7 @@ if __name__ == '__main__':
     parser.add_argument('--glimpse_type', help='type of glimpse net', type=str,
                         default='CNN')
     parser.add_argument('--num_glimpses', help='type of glimpse net', type=int,
-                        default=4)
+                        default=0)
     parser.add_argument('--cnn_architecture', help='architecture for CNN',
                         type=str, default=None)
     # get all args
