@@ -26,6 +26,8 @@ import run
 def run_experiment(model, config, **kwargs):
 
     config['model'] = model
+    config['train'] = True
+    config['eval'] = True
     # get trial variants
     trial_configs = list(util.product_dict(**kwargs))
     for trial_config in trial_configs:
@@ -55,6 +57,13 @@ def cnn(config):
                    dropout=[0.1, 0.25])
 
 
+def small_cnn(config):
+    run_experiment('cnn', config,
+                   cnn_architecture=['vgg5', 'vgg7', 'vgg9'],
+                   learning_rate=[1e-4],
+                   dropout=[0.25])
+
+
 def ram(config):
     run_experiment('ram', config,
                    learning_rate=[1e-4, 1e-5],
@@ -72,7 +81,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # general
     parser.add_argument('--exp', help='name of exp to run', type=str,
-                        choices=['ffnn', 'cnn', 'ram'], default='ram')
+                        choices=['ffnn', 'cnn', 'small_cnn', 'ram'], default='ram')
     parser.add_argument('--num_cpus', help='how many gpus for exp', type=int,
                         default=12)
     # file system
