@@ -73,6 +73,6 @@ def process_predictions(predictions, include_locs=True, num_glimpses=None):
 
     if num_glimpses:
         results['num_glimpses'] = [num_glimpses]*len(results.index)
-    if not include_locs:
+    if not include_locs and 'locs' in results:
         del results['locs']
     return results
