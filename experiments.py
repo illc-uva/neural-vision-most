@@ -59,9 +59,10 @@ def cnn(config):
 
 def small_cnn(config):
     run_experiment('cnn', config,
-                   cnn_architecture=['vgg5', 'vgg7', 'vgg9'],
+                   cnn_architecture=['vgg5', 'vgg7', 'vgg9', 'vgg11', 'vgg13'],
                    learning_rate=[1e-4],
-                   dropout=[0.25])
+                   dropout=[0.25],
+                   grayscale=[True])
 
 
 def ram(config):
