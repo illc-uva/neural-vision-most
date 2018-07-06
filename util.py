@@ -51,7 +51,7 @@ def get_ratio(n1, n2):
     return simplify(max(n1, n2), min(n1, n2))
 
 
-def process_predictions(predictions, include_locs=True):
+def process_predictions(predictions, include_locs=True, num_glimpses=None):
     results = pd.DataFrame(predictions)
     results['filename'] = results['filename'].astype(str)
 
@@ -71,6 +71,8 @@ def process_predictions(predictions, include_locs=True):
         lambda idx: get_ratio(results['num_blue'][idx],
                               results['num_yellow'][idx]))
 
+    if num_glimpses:
+        results['num_glimpses'] = [num_glimpses]*len(results.index)
     if not include_locs:
         del results['locs']
     return results

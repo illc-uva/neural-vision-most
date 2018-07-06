@@ -278,7 +278,8 @@ def run(config):
         config['model_dir'] = config['out_path']
         model = globals()[config['model']](config, save_runconfig)
         results = model.predict(input_fn=test_input_fn)
-        output = util.process_predictions(results, include_locs=False)
+        output = util.process_predictions(results, include_locs=False,
+                                          num_glimpses=config['num_glimpses'])
         print(output)
         output.to_csv(config['model_dir'] + 'test_predict.csv')
 
