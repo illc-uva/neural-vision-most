@@ -383,7 +383,8 @@ def ram_model_fn(features, labels, mode, params):
             'logits': logits,
             'predicted_class': predicted_classes,
             'locs': locs,
-            'filename': features['filename']
+            'filename': features['filename'],
+            'num_glimpses': params['num_glimpses']
         }
         return tf.estimator.EstimatorSpec(mode, predictions=outputs)
 
