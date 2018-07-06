@@ -57,6 +57,97 @@ def ffnn(config, run_config):
 
 def cnn(config, run_config):
     architectures = {
+        # TODO: parameterize these better, since they build on each other
+        'vgg5': {
+            'layers': [
+                {'num_convs': 1,
+                 'filters': 64,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 1,
+                 'filters': 128,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+            ],
+            'dense': [
+                {'units': 4096,
+                 'activation': tf.nn.relu,
+                 'rate': config['dropout'] or 0.1}
+            ]*2
+        },
+        'vgg7': {
+            'layers': [
+                {'num_convs': 1,
+                 'filters': 64,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 1,
+                 'filters': 128,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 256,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+            ],
+            'dense': [
+                {'units': 4096,
+                 'activation': tf.nn.relu,
+                 'rate': config['dropout'] or 0.1}
+            ]*2
+        },
+        'vgg9': {
+            'layers': [
+                {'num_convs': 1,
+                 'filters': 64,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 1,
+                 'filters': 128,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 256,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+                {'num_convs': 2,
+                 'filters': 512,
+                 'kernel_size': 3,
+                 'pool_strides': 2,
+                 'pool_size': 2,
+                 'padding': 'same',
+                 'activation': tf.nn.relu},
+            ],
+            'dense': [
+                {'units': 4096,
+                 'activation': tf.nn.relu,
+                 'rate': config['dropout'] or 0.1}
+            ]*2
+        },
         'vgg11': {
             'layers': [
                 {'num_convs': 1,
@@ -345,6 +436,8 @@ if __name__ == '__main__':
                         default=0)
     parser.add_argument('--cnn_architecture', help='architecture for CNN',
                         type=str, default=None)
+    parser.add_argument('--dropout', help='dropout for final layers of CNN',
+                        type=float, default=0.25)
     # get all args
     args = parser.parse_args()
 
