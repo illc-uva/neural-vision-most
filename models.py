@@ -407,7 +407,8 @@ def ram_model_fn(features, labels, mode, params):
         logll = log_likelihood(loc_means, locs,
                                params['std'])
         # reward: 1 for correct class, 0 for incorrect
-        reward = tf.to_float(tf.equal(predicted_classes, labels))
+        reward = tf.to_float(
+            tf.equal(tf.stop_gradient(predicted_classes), labels))
         # reward: [batch_size, 1]
         reward = tf.expand_dims(reward, 1)
         # reward: [batch_size, num_glimpses]
