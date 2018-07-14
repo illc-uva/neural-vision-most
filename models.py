@@ -308,8 +308,8 @@ def ram_model_fn(features, labels, mode, params):
 
     # -- locs: [None, loc_dim]
     # zeros are like fixating at center of screen in experiments
-    locs = tf.zeros(
-        [batch_size, params['loc_dim']])
+    # locs = tf.zeros([batch_size, params['loc_dim']])
+    locs = tf.random_uniform([batch_size, params['loc_dim']], -1., 1.)
 
     # NOTE: the use of a tf.while_loop allows extracting information by passing
     # through and concatenating to a tensor at each iteration.
