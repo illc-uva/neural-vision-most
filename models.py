@@ -187,9 +187,9 @@ def ram_model_fn(features, labels, mode, params):
             patches = retina(images, locs)
             # TODO: dropout here?
             with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
-                net = tf.layers.conv2d(patches, 64, 5)
-                net = tf.layers.conv2d(net, 64, 3)
-                net = tf.layers.conv2d(net, 128, 3)
+                net = tf.layers.conv2d(patches, 64, 5, activation=tf.nn.relu)
+                net = tf.layers.conv2d(net, 64, 3, activation=tf.nn.relu)
+                net = tf.layers.conv2d(net, 128, 3, activation=tf.nn.relu)
                 net = tf.reshape(net, [tf.shape(patches)[0],
                                        np.prod(net.shape[1:])])
                 what = tf.layers.dense(net,
