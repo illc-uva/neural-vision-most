@@ -375,7 +375,8 @@ def run(config):
         output = util.process_predictions(results, include_locs=False,
                                           num_glimpses=config['num_glimpses'])
         print(output)
-        output.to_csv(config['model_dir'] + 'test_predict.csv')
+        output.to_csv(config['model_dir'] + (
+            config['predict_file'] or 'test_predict.csv'))
 
 
 if __name__ == '__main__':
@@ -384,6 +385,8 @@ if __name__ == '__main__':
     # file system arguments
     parser.add_argument('--out_path', help='path to outputs', type=str,
                         default='/tmp')
+    parser.add_argument('--predict_file', help='filename of predictions',
+                        type=str, default='test_predict.csv')
     parser.add_argument('--train_images', help='regex to path of test images',
                         type=str, default='images/train/*.png')
     parser.add_argument('--test_images', help='regex to path of test images',
