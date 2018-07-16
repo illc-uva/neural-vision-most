@@ -263,10 +263,10 @@ def ram(config, run_config):
             'num_patches': config['num_patches'] or 2,
             'g_size': config['glimpse_size'] or 256,
             'l_size': config['glimpse_size'] or 256,
-            'glimpse_out_size': config['glimpse_out_size'] or 256,
+            'glimpse_out_size': config['glimpse_out_size'] or 512,
             'loc_dim': 2,  # x, y
             'std': 0.03,  # TODO: random search?
-            'core_size': config['core_size'] or 512,
+            'core_size': config['core_size'] or 1024,
             'num_glimpses': config['num_glimpses'] or 12,  # TODO: vary glimpse number by batch
             'learning_rate': config['learning_rate'] or 1e-5,
             'num_classes': config['num_classes'],
