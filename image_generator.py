@@ -80,20 +80,32 @@ def no_overlap(dots, x, y, radius):
                 for dot in dots])
 
 
-def scattered_random(colors_dict, num_pixels=256, padding=16,
+def get_random_radii(colors_dict, min_radius, max_radius, std=1):
+    mean = (max_radius - min_radius) / 2
+    return {color: [clip(random.gauss(mean, std), min_radius, max_radius)
+                    for _ in range(colors_dict[color])]
+            for color in colors_dict}
+
+
+def scattered_random(colors_dict, area_control=False,
+                     num_pixels=256, padding=16,
                      min_radius=1, max_radius=5):
     """Generates ScatteredRandom images: the dots are scattered
     randomly through the image. """
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels - padding, num_pixels - padding
     dots = []
+    if area_control:
+        pass
+    else:
+        radii = get_random_radii(colors_dict, min_radius, max_radius)
     for color in colors_dict:
-        for _ in range(colors_dict[color]):
+        for r in radii[color]:
             new_dot_added = False
             while not new_dot_added:
                 x = random.uniform(x_min, x_max)
                 y = random.uniform(y_min, y_max)
-                r = clip(random.gauss(3, 1), min_radius, max_radius)
+                # r = clip(random.gauss(3, 1), min_radius, max_radius)
                 # avoid overlap with existing circles
                 if no_overlap(dots, x, y, r):
                     dots.append(Dot(x=x, y=y, radius=r, color=color))
