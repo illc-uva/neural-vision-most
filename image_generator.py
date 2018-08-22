@@ -148,10 +148,8 @@ def scattered_split(colors_dict, area_control=False,
     colors = list(colors_dict.keys())
     random.shuffle(colors)
     for idx in range(len(colors)):
-        cur_dots = color_dots[colors[idx]]
-        dots.extend([
-            Dot(dot.x + idx*width_per, dot.y, dot.radius, dot.color)
-            for dot in cur_dots])
+        dots.extend([dot._replace(x=dot.x + idx*width_per)
+                     for dot in color_dots[colors[idx]]])
     return dots
 
 
