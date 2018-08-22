@@ -258,7 +258,7 @@ def column_pairs_sorted(colors_dict, num_pixels=256, pad=2.5,
     return dots
 
 
-def make_image(file_name, dots, num_pixels=256):
+def make_image(file_name, dots, num_pixels=(256, 256)):
     """Make and save an image from a list of `Dot`s.
 
     Args:
@@ -266,14 +266,17 @@ def make_image(file_name, dots, num_pixels=256):
         dots: an iterable of `Dot`s to draw
         num_pixels: the saved image will be a square with num_pixels sides
     """
+    # TODO: update doc-string for proper width-height understanding!
 
     plt.rcParams['axes.facecolor'] = 'grey'
     plt.rcParams['axes.linewidth'] = 0
 
-    fig, ax = plt.subplots(figsize=(1, 1), dpi=num_pixels)
+    dpi = min(num_pixels)
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches((max(num_pixels) / dpi, 1))
 
-    ax.set_xlim((0, num_pixels))
-    ax.set_ylim((0, num_pixels))
+    ax.set_xlim((0, num_pixels[0]))
+    ax.set_ylim((0, num_pixels[1]))
     for dot in dots:
         ax.add_patch(
             Circle((dot.x, dot.y), radius=dot.radius, fc=dot.color))
@@ -286,7 +289,7 @@ def make_image(file_name, dots, num_pixels=256):
 
 
 def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.',
-               num_pixels=256, min_radius=1, max_radius=5):
+               num_pixels=(256, 256), min_radius=1, max_radius=5):
 
     for trial_type in trial_types:
         image_method = globals()[trial_type]
