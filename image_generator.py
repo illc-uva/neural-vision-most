@@ -80,11 +80,38 @@ def no_overlap(dots, x, y, radius):
                 for dot in dots])
 
 
+# TODO: document these methods!
 def get_random_radii(colors_dict, min_radius, max_radius, std=1):
     mean = (max_radius - min_radius) / 2
     return {color: [clip(random.gauss(mean, std), min_radius, max_radius)
                     for _ in range(colors_dict[color])]
             for color in colors_dict}
+
+
+def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5):
+    mean = (max_radius - min_radius) / 2
+    total_area = math.pi*(mean**2)*max(colors_dict.values())
+    radii = {color: [] for color in colors_dict}
+    for color in colors_dict:
+        num_remaining = colors_dict[color]
+        area_remaining = total_area
+        while num_remaining > 1:
+            mean = math.sqrt(area_remaining / (num_remaining*math.pi))
+            # get radius that is not too big to use up all remaining area!
+            found_r = False
+            while not found_r:
+                r = clip(random.gauss(mean, std), min_radius, max_radius)
+                if math.pi*r**2 < area_remaining:
+                    found_r = True
+            print(num_remaining)
+            print(area_remaining)
+            print(r)
+            print(math.pi*r**2)
+            radii[color].append(r)
+            area_remaining -= math.pi*r**2
+            num_remaining -= 1
+        radii[color].append(math.sqrt(area_remaining / math.pi))
+    return radii
 
 
 def scattered_random(colors_dict, area_control=False,
@@ -96,7 +123,7 @@ def scattered_random(colors_dict, area_control=False,
     x_max, y_max = num_pixels - padding, num_pixels - padding
     dots = []
     if area_control:
-        pass
+        radii = get_area_controlled_radii(colors_dict, min_radius, max_radius)
     else:
         radii = get_random_radii(colors_dict, min_radius, max_radius)
     for color in colors_dict:
@@ -105,7 +132,6 @@ def scattered_random(colors_dict, area_control=False,
             while not new_dot_added:
                 x = random.uniform(x_min, x_max)
                 y = random.uniform(y_min, y_max)
-                # r = clip(random.gauss(3, 1), min_radius, max_radius)
                 # avoid overlap with existing circles
                 if no_overlap(dots, x, y, r):
                     dots.append(Dot(x=x, y=y, radius=r, color=color))
