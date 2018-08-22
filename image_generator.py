@@ -103,10 +103,6 @@ def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5):
                 r = clip(random.gauss(mean, std), min_radius, max_radius)
                 if math.pi*r**2 < area_remaining:
                     found_r = True
-            print(num_remaining)
-            print(area_remaining)
-            print(r)
-            print(math.pi*r**2)
             radii[color].append(r)
             area_remaining -= math.pi*r**2
             num_remaining -= 1
@@ -115,12 +111,12 @@ def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5):
 
 
 def scattered_random(colors_dict, area_control=False,
-                     num_pixels=256, padding=16,
+                     num_pixels=(256, 256), padding=16,
                      min_radius=1, max_radius=5):
     """Generates ScatteredRandom images: the dots are scattered
     randomly through the image. """
     x_min, y_min = padding, padding
-    x_max, y_max = num_pixels - padding, num_pixels - padding
+    x_max, y_max = num_pixels[0] - padding, num_pixels[1] - padding
     dots = []
     if area_control:
         radii = get_area_controlled_radii(colors_dict, min_radius, max_radius)
@@ -139,7 +135,29 @@ def scattered_random(colors_dict, area_control=False,
     return dots
 
 
-def scattered_pairs(colors_dict, num_pixels=256, padding=16,
+def scattered_split(colors_dict, area_control=False,
+                    num_pixels=(512, 256), padding=16,
+                    min_radius=1, max_radius=5):
+    width_per = num_pixels[0] / len(colors_dict)
+    color_dots = {color: scattered_random(
+        {color: colors_dict[color]}, area_control=area_control,
+        num_pixels=(width_per, num_pixels[1]), padding=padding,
+        min_radius=min_radius, max_radius=max_radius)
+        for color in colors_dict}
+    dots = []
+    colors = list(colors_dict.keys())
+    random.shuffle(colors)
+    for idx in range(len(colors)):
+        cur_dots = color_dots[colors[idx]]
+        dots.extend([
+            Dot(dot.x + idx*width_per, dot.y, dot.radius, dot.color)
+            for dot in cur_dots])
+    return dots
+
+
+# TODO: test the tuple num_pixels in the three following methods
+# TODO: add area_control to these three methods a la scattered_random
+def scattered_pairs(colors_dict, num_pixels=(256, 256), padding=16,
                     min_radius=1, max_radius=5):
     """Generates ScatteredPairs images: the dots are paired together, one of
     each type of color.  The remaining dots in the dominant color are randomly
@@ -148,7 +166,7 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
     NOTE: `colors_dict` must have only two keys. """
 
     x_min, y_min = padding, padding
-    x_max, y_max = num_pixels - padding, num_pixels - padding
+    x_max, y_max = num_pixels[0] - padding, num_pixels[1] - padding
 
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
@@ -187,7 +205,7 @@ def scattered_pairs(colors_dict, num_pixels=256, padding=16,
     return dots
 
 
-def column_pairs_mixed(colors_dict, num_pixels=256, pad=2.5,
+def column_pairs_mixed(colors_dict, num_pixels=(256, 256), pad=2.5,
                        min_radius=1, max_radius=5):
     """Generates ColumnPairsMixed images: the dots are paired in two columns,
     but which color is in which column depends on the row.
@@ -195,7 +213,7 @@ def column_pairs_mixed(colors_dict, num_pixels=256, pad=2.5,
     NOTE: `colors_dict` must have only two keys. """
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
-    center = num_pixels / 2
+    center = num_pixels[0] / 2
     x_vals = (center - max_radius - pad/2, center + max_radius + pad/2)
     y_step = max_radius + 2*pad
     y0 = center + int(sort_dict[1][1] / 2)*y_step
@@ -226,7 +244,7 @@ def column_pairs_mixed(colors_dict, num_pixels=256, pad=2.5,
     return dots
 
 
-def column_pairs_sorted(colors_dict, num_pixels=256, pad=2.5,
+def column_pairs_sorted(colors_dict, num_pixels=(256, 256), pad=2.5,
                         min_radius=1, max_radius=5):
     """Generates ColumnPairsSorted images: the dots are paired in two columns,
     with one color on the left and one on the right.
@@ -234,7 +252,7 @@ def column_pairs_sorted(colors_dict, num_pixels=256, pad=2.5,
     NOTE: `colors_dict` must have only two keys. """
     assert len(colors_dict) == 2
     sort_dict = sorted(colors_dict.items(), key=lambda pair: pair[1])
-    center = num_pixels / 2
+    center = num_pixels[0] / 2
     x_vals = (center - max_radius - pad/2, center + max_radius + pad/2)
     y_step = max_radius + 2*pad
     y0 = center + int(sort_dict[1][1] / 2)*y_step
