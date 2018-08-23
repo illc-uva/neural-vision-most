@@ -46,8 +46,6 @@ import math
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 
-# TODO: area controlled trials, i.e. smart radius
-# TODO: parameterize radius size for dot-controlled trials
 
 Dot = namedtuple('Dot', ['x', 'y', 'radius', 'color'])
 
@@ -88,9 +86,11 @@ def get_random_radii(colors_dict, min_radius, max_radius, std=1):
             for color in colors_dict}
 
 
-def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5):
+def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5,
+                              total_area=None):
     mean = (max_radius - min_radius) / 2
-    total_area = math.pi*(mean**2)*max(colors_dict.values())
+    if not total_area:
+        total_area = math.pi*(mean**2)*max(colors_dict.values())
     radii = {color: [] for color in colors_dict}
     for color in colors_dict:
         num_remaining = colors_dict[color]
@@ -111,17 +111,20 @@ def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5):
 
 
 def scattered_random(colors_dict, area_control=False,
+                     total_area=None,
                      num_pixels=(256, 256), padding=16,
-                     min_radius=1, max_radius=5):
+                     min_radius=1, max_radius=5, std=1):
     """Generates ScatteredRandom images: the dots are scattered
     randomly through the image. """
     x_min, y_min = padding, padding
     x_max, y_max = num_pixels[0] - padding, num_pixels[1] - padding
     dots = []
     if area_control:
-        radii = get_area_controlled_radii(colors_dict, min_radius, max_radius)
+        radii = get_area_controlled_radii(colors_dict, min_radius, max_radius,
+                                          std=std, total_area=total_area)
     else:
-        radii = get_random_radii(colors_dict, min_radius, max_radius)
+        radii = get_random_radii(colors_dict, min_radius, max_radius, std=std)
+    # print({color: sum([math.pi*r**2 for r in radii[color]]) for color in radii})
     for color in colors_dict:
         for r in radii[color]:
             new_dot_added = False
@@ -136,17 +139,24 @@ def scattered_random(colors_dict, area_control=False,
 
 
 def scattered_split(colors_dict, area_control=False,
-                    num_pixels=(512, 256), padding=16,
-                    min_radius=1, max_radius=5):
+                    num_pixels=(512, 256), padding=24,
+                    min_radius=1, max_radius=5, std=0.5,
+                    color_order=None):
     width_per = num_pixels[0] / len(colors_dict)
+    mean = (max_radius - min_radius) / 2
+    total_area = math.pi*(mean**2)*max(colors_dict.values())
     color_dots = {color: scattered_random(
         {color: colors_dict[color]}, area_control=area_control,
+        total_area=total_area,
         num_pixels=(width_per, num_pixels[1]), padding=padding,
-        min_radius=min_radius, max_radius=max_radius)
+        min_radius=min_radius, max_radius=max_radius, std=std)
         for color in colors_dict}
     dots = []
-    colors = list(colors_dict.keys())
-    random.shuffle(colors)
+    if not color_order:
+        colors = list(colors_dict.keys())
+        random.shuffle(colors)
+    else:
+        colors = color_order
     for idx in range(len(colors)):
         dots.extend([dot._replace(x=dot.x + idx*width_per)
                      for dot in color_dots[colors[idx]]])
@@ -305,7 +315,8 @@ def make_image(file_name, dots, num_pixels=(256, 256)):
 
 
 def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.',
-               num_pixels=(256, 256), min_radius=1, max_radius=5):
+               num_pixels=(256, 256), min_radius=1, max_radius=5, std=1,
+               area_control=True):
 
     for trial_type in trial_types:
         image_method = globals()[trial_type]
@@ -321,21 +332,55 @@ def make_batch(trial_types, color_dicts, num_per_dict, out_dir='.',
                     image_method(color_dict,
                                  num_pixels=num_pixels,
                                  min_radius=min_radius,
-                                 max_radius=max_radius),
+                                 max_radius=max_radius, std=std,
+                                 area_control=area_control),
                     num_pixels=num_pixels)
 
 
+def make_split_batch(color_dicts, num_per_dict, out_dir='.',
+                     num_pixels=(800, 400), min_radius=1.5, max_radius=3.5,
+                     std=0.5, area_control=True):
+    for dict_idx in range(len(color_dicts)):
+        color_dict = color_dicts[dict_idx]
+        order = list(color_dict.keys())
+        for idx in range(num_per_dict):
+            # TODO: integrate this order parameter into make_batch instead of
+            # having this as a separate method?
+            # balance order by flipping every time
+            order = list(reversed(order))
+            make_image(
+                '{}/{}_{}_{}_{}.png'.format(
+                    out_dir, 'scattered_split',
+                    '_'.join([str(key) + str(color_dict[key])
+                              for key in color_dict]),
+                    idx, dict_idx),
+                scattered_split(color_dict,
+                                num_pixels=num_pixels,
+                                min_radius=min_radius,
+                                max_radius=max_radius, std=std,
+                                color_order=order, area_control=area_control),
+                num_pixels=num_pixels)
+
+
 def dicts_from_ratios(ratios, dicts_per_ratio,
-                      colors=['b', 'y'], dot_range=(5, 25)):
+                      colors=['b', 'y'], dot_range=(5, 25), multipliers=None):
     dicts = []
-    for ratio in ratios:
-        # TODO: better method of generating ratios?
-        multipliers = [n for n in range(1, 10) if n*min(ratio) >= dot_range[0]
-                       and n*max(ratio) <= dot_range[1]]
+    assert multipliers is None or len(multipliers) == len(ratios)
+    for idx in range(len(ratios)):
+        ratio = ratios[idx]
+        if not multipliers:
+            # TODO: better method of generating ratios?
+            mults = [n for n in range(1, 10)
+                     if n*min(ratio) >= dot_range[0]
+                     and n*max(ratio) <= dot_range[1]]
+        else:
+            mults = multipliers[idx]
         for idx in range(dicts_per_ratio):
             # reverse the ratio every trial to mix
             ratio = list(reversed(ratio))
-            mult = random.choice(multipliers)
+            # mult = random.choice(multipliers)
+            # TODO: make sure this logic works
+            mult = mults[idx % len(mults)]
             dicts.append({colors[n]: mult*ratio[n] for n in range(len(colors))})
     return dicts
 
