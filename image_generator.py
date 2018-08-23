@@ -78,8 +78,21 @@ def no_overlap(dots, x, y, radius):
                 for dot in dots])
 
 
-# TODO: document these methods!
 def get_random_radii(colors_dict, min_radius, max_radius, std=1):
+    """Gets random radii of dots for a color_dict.  Radii are sampled from
+    a Gaussian distribution with mean (max_r - min_r) / 2 and standard
+    deviation std, then clipped.
+
+    Args:
+        color_dict: dictionary of colors, with integer values
+        min_radius: smallest radius
+        max_radius: biggest radius
+        std: standard deviation
+
+    Returns:
+        a dictionary, with the same keys as colors_dict, and values a list of
+        colors_dict[color] floating point numbers
+    """
     mean = (max_radius - min_radius) / 2
     return {color: [clip(random.gauss(mean, std), min_radius, max_radius)
                     for _ in range(colors_dict[color])]
@@ -88,6 +101,22 @@ def get_random_radii(colors_dict, min_radius, max_radius, std=1):
 
 def get_area_controlled_radii(colors_dict, min_radius, max_radius, std=0.5,
                               total_area=None):
+    """Gets area controlled radii: the sum of the areas of circles of each
+    color will be equal (either to total_area or to the total area taken by the
+    largest number in colors_dict dots of mean radius).
+
+    Args:
+        colors_dict: as above
+        min_radius: as above
+        max_radius: as above
+        std: as above
+        total_area: a float, the total area to distribute to each color.  If
+            not specified, this will be set to N*(max_radius - min_radius)/2^2,
+            where N is the largest value in colors_dict
+
+    Returns:
+        a dictionary, as above
+    """
     mean = (max_radius - min_radius) / 2
     if not total_area:
         total_area = math.pi*(mean**2)*max(colors_dict.values())
@@ -142,6 +171,9 @@ def scattered_split(colors_dict, area_control=False,
                     num_pixels=(512, 256), padding=24,
                     min_radius=1, max_radius=5, std=0.5,
                     color_order=None):
+    """Generates ScatteredSplit images: the dots are scattered randomly through
+    the image, but each color has its own region of the image, with different
+    colors laid out horizontally. """
     width_per = num_pixels[0] / len(colors_dict)
     mean = (max_radius - min_radius) / 2
     total_area = math.pi*(mean**2)*max(colors_dict.values())
