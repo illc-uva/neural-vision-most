@@ -22,6 +22,14 @@ import pandas as pd
 import scipy
 import scipy.optimize
 import matplotlib.pyplot as plt
+# from plotnine import *
+
+
+def r2(y_obs, y_fit):
+    mean_obs = np.mean(y_obs)
+    ss_tot = np.sum((y_obs - mean_obs)**2)
+    ss_res = np.sum((y_obs - y_fit)**2)
+    return 1 - ss_res / ss_tot
 
 
 def weber_function(ns, w):
@@ -37,27 +45,50 @@ def weber_function(ns, w):
 
 
 def fit_weber(data):
-    # first, add 50% accuracy at 1/1 ratio
-    data = data.append({'n1': 1, 'n2': 1, 'mean_accuracy': 0.5}, ignore_index=True)
     ns = data.as_matrix(columns=['n1', 'n2']).T
     w, cov = scipy.optimize.curve_fit(weber_function, ns, data['mean_accuracy'])
     print w
     print cov
     fitted_ys = weber_function(ns, w)
+    rsq = r2(data['mean_accuracy'], fitted_ys)
+    print rsq
     data['ratio'] = data['n1'] / data['n2']
     plt.scatter(data['ratio'], data['mean_accuracy'])
     plt.plot(data['ratio'], fitted_ys)
     plt.show()
+    return w, cov, rsq, fitted_ys
 
 
 def fit_models(mean_file, model_prefix):
     data = pd.read_csv(mean_file)
     models = list(
         data[data['model'].str.startswith(model_prefix)]['model'].unique())
+    model_frames = []
+    curve_fits = []
     for model in models:
         print model
         model_data = data[data['model'] == model]
-        fit_weber(model_data)
+        # first, add 50% accuracy at 1/1 ratio
+        model_data = model_data.append(
+            {'n1': 1, 'n2': 1, 'mean_accuracy': 0.5},
+            ignore_index=True)
+        w, cov, rsq, ys = fit_weber(model_data)
+        curve_fits.append({
+            'model': model,
+            'w': w[0],
+            'r_squared': rsq,
+            'cov': cov[0][0]})
+        model_data['fit_weber'] = ys
+        model_frames.append(model_data)
+    curve_fits = pd.DataFrame(curve_fits)
+    curve_fits.to_csv('curve_fits_' + model_prefix + '.csv')
+    models = pd.concat(model_frames)
+    models['ratio'] = models['n1'] / models['n2']
+    """
+    print (ggplot(models, aes(x='ratio'))
+           + geom_point(aes(y='mean_accuracy', colour='model'))
+           + geom_line(aes(y='fit_weber', colour='model')))
+   """
 
 
 if __name__ == '__main__':
