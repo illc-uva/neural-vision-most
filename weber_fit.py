@@ -21,8 +21,7 @@ import numpy as np
 import pandas as pd
 import scipy
 import scipy.optimize
-import matplotlib.pyplot as plt
-# from plotnine import *
+from plotnine import *
 
 
 def r2(y_obs, y_fit):
@@ -52,10 +51,6 @@ def fit_weber(data):
     fitted_ys = weber_function(ns, w)
     rsq = r2(data['mean_accuracy'], fitted_ys)
     print rsq
-    data['ratio'] = data['n1'] / data['n2']
-    plt.scatter(data['ratio'], data['mean_accuracy'])
-    plt.plot(data['ratio'], fitted_ys)
-    plt.show()
     return w, cov, rsq, fitted_ys
 
 
@@ -70,7 +65,7 @@ def fit_models(mean_file, model_prefix):
         model_data = data[data['model'] == model]
         # first, add 50% accuracy at 1/1 ratio
         model_data = model_data.append(
-            {'n1': 1, 'n2': 1, 'mean_accuracy': 0.5},
+            {'model': model, 'n1': 1, 'n2': 1, 'mean_accuracy': 0.5},
             ignore_index=True)
         w, cov, rsq, ys = fit_weber(model_data)
         curve_fits.append({
@@ -84,11 +79,10 @@ def fit_models(mean_file, model_prefix):
     curve_fits.to_csv('curve_fits_' + model_prefix + '.csv')
     models = pd.concat(model_frames)
     models['ratio'] = models['n1'] / models['n2']
-    """
+    print models
     print (ggplot(models, aes(x='ratio'))
            + geom_point(aes(y='mean_accuracy', colour='model'))
-           + geom_line(aes(y='fit_weber', colour='model')))
-   """
+           + geom_line(aes(y='fit_weber', group='model', colour='model')))
 
 
 if __name__ == '__main__':
