@@ -82,7 +82,7 @@ def fit_models(mean_file, model_prefix):
     print models
     print (ggplot(models, aes(x='ratio'))
            + geom_point(aes(y='mean_accuracy', colour='model'))
-           + geom_line(aes(y='fit_weber', group='model', colour='model')))
+           + geom_line(aes(y='fit_weber', colour='model')))
 
 
 if __name__ == '__main__':
