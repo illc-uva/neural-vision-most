@@ -40,16 +40,16 @@ def weber_function(ns, w):
     n1 = ns[0]
     n2 = ns[1]
     return 1 - (0.5 * scipy.special.erfc(
-        (n1 - n2) / (np.sqrt(2) * w * np.sqrt(n1**2 + n2**2)))) # * 100
+        (n1 - n2) / (np.sqrt(2) * w * np.sqrt(n1**2 + n2**2))))
 
 
 def fit_weber(data):
     ns = data.as_matrix(columns=['n1', 'n2']).T
-    w, cov = scipy.optimize.curve_fit(weber_function, ns, data['mean_accuracy'])
+    w, cov = scipy.optimize.curve_fit(weber_function, ns, data['accuracy'])
     print w
     print cov
     fitted_ys = weber_function(ns, w)
-    rsq = r2(data['mean_accuracy'], fitted_ys)
+    rsq = r2(data['accuracy'], fitted_ys)
     print rsq
     return w, cov, rsq, fitted_ys
 
@@ -62,27 +62,32 @@ def fit_models(mean_file, model_prefix):
     curve_fits = []
     for model in models:
         print model
-        model_data = data[data['model'] == model]
-        # first, add 50% accuracy at 1/1 ratio
-        model_data = model_data.append(
-            {'model': model, 'n1': 1, 'n2': 1, 'mean_accuracy': 0.5},
-            ignore_index=True)
-        w, cov, rsq, ys = fit_weber(model_data)
-        curve_fits.append({
-            'model': model,
-            'w': w[0],
-            'r_squared': rsq,
-            'cov': cov[0][0]})
-        model_data['fit_weber'] = ys
-        model_frames.append(model_data)
+        for trial_type in list(data['trial_type'].unique()):
+            print trial_type
+            model_data = data[data['model'] == model]
+            model_data = model_data[model_data['trial_type'] == trial_type]
+            # first, add 50% accuracy at 1/1 ratio
+            model_data = model_data.append(
+                {'model': model, 'n1': 1, 'n2': 1, 'accuracy': 0.5,
+                 'ratio': 1.0, 'trial_type': trial_type},
+                ignore_index=True)
+            w, cov, rsq, ys = fit_weber(model_data)
+            curve_fits.append({
+                'model': model,
+                'trial_type': trial_type,
+                'w': w[0],
+                'r_squared': rsq,
+                'cov': cov[0][0]})
+            model_data['fit_weber'] = ys
+            print model_data
+            model_frames.append(model_data)
     curve_fits = pd.DataFrame(curve_fits)
     curve_fits.to_csv('curve_fits_' + model_prefix + '.csv')
     models = pd.concat(model_frames)
-    models['ratio'] = models['n1'] / models['n2']
-    print models
     print (ggplot(models, aes(x='ratio'))
-           + geom_point(aes(y='mean_accuracy', colour='model'))
-           + geom_line(aes(y='fit_weber', colour='model')))
+           + geom_point(aes(y='accuracy', colour='trial_type'))
+           + geom_line(aes(y='fit_weber', colour='trial_type'))
+           + facet_wrap('model'))
 
 
 if __name__ == '__main__':
@@ -90,7 +95,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--means', type=str,
                         help='file with mean accuracy data',
-                        default='mean_accuracies_long.csv')
+                        default='results/mean_accuracies.csv')
     parser.add_argument('--model_prefix', type=str,
                         help='prefix of model(s) to analyze',
                         default='RAM')
