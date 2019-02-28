@@ -81,6 +81,16 @@ def fit_models(mean_file, model_prefix):
     curve_fits = pd.DataFrame(curve_fits)
     curve_fits.to_csv('results/curve_fits_' + model_prefix + '.csv')
     models = pd.concat(model_frames)
+    # fix the ordering of the model labels
+    models['model'] = models['model'].astype(
+        'category', ordered=True,
+        categories=list(models['model'].unique()))
+    # fix order of trial types
+    models['trial_type'] = models['trial_type'].astype(
+        'category', ordered=True,
+        # is there a way to not hand-code this?
+        categories=['scattered_random', 'scattered_pairs',
+                    'column_pairs_mixed', 'column_pairs_sorted'])
     plot = (ggplot(models, aes(x='ratio'))
             + geom_point(aes(y='accuracy', colour='trial_type'))
             + geom_line(aes(y='fit_weber', colour='trial_type'))
