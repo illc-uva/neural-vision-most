@@ -82,7 +82,7 @@ def fit_models(mean_file, model_prefix):
             print model_data
             model_frames.append(model_data)
     curve_fits = pd.DataFrame(curve_fits)
-    curve_fits.to_csv('curve_fits_' + model_prefix + '.csv')
+    curve_fits.to_csv('results/curve_fits_' + model_prefix + '.csv')
     models = pd.concat(model_frames)
     print (ggplot(models, aes(x='ratio'))
            + geom_point(aes(y='accuracy', colour='trial_type'))
