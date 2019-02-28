@@ -17,7 +17,6 @@ Copyright (c) 2019 Shane Steinert-Threlkeld and Lewis O'Sullivan
     *****
 """
 import pandas as pd
-import numpy as np
 
 
 def vgg_filename(depth):

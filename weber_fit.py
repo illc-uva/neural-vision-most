@@ -16,6 +16,7 @@ Copyright (c) 2019 Shane Steinert-Threlkeld and Lewis O'Sullivan
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
     *****
 """
+from __future__ import print_function
 import argparse
 import numpy as np
 import pandas as pd
@@ -46,11 +47,8 @@ def weber_function(ns, w):
 def fit_weber(data):
     ns = data.as_matrix(columns=['n1', 'n2']).T
     w, cov = scipy.optimize.curve_fit(weber_function, ns, data['accuracy'])
-    print w
-    print cov
     fitted_ys = weber_function(ns, w)
     rsq = r2(data['accuracy'], fitted_ys)
-    print rsq
     return w, cov, rsq, fitted_ys
 
 
@@ -61,9 +59,7 @@ def fit_models(mean_file, model_prefix):
     model_frames = []
     curve_fits = []
     for model in models:
-        print model
         for trial_type in list(data['trial_type'].unique()):
-            print trial_type
             model_data = data[data['model'] == model]
             model_data = model_data[model_data['trial_type'] == trial_type]
             # first, add 50% accuracy at 1/1 ratio
@@ -79,15 +75,20 @@ def fit_models(mean_file, model_prefix):
                 'r_squared': rsq,
                 'cov': cov[0][0]})
             model_data['fit_weber'] = ys
-            print model_data
+            print(model_data)
+            print(curve_fits[-1])
             model_frames.append(model_data)
     curve_fits = pd.DataFrame(curve_fits)
     curve_fits.to_csv('results/curve_fits_' + model_prefix + '.csv')
     models = pd.concat(model_frames)
-    print (ggplot(models, aes(x='ratio'))
-           + geom_point(aes(y='accuracy', colour='trial_type'))
-           + geom_line(aes(y='fit_weber', colour='trial_type'))
-           + facet_wrap('model'))
+    plot = (ggplot(models, aes(x='ratio'))
+            + geom_point(aes(y='accuracy', colour='trial_type'))
+            + geom_line(aes(y='fit_weber', colour='trial_type'))
+            + facet_wrap('model')
+            + theme(legend_text=element_text(size=6),
+                    legend_title=element_text(size=8)))
+    plot.save('results/{}.png'.format(model_prefix),
+              height=6, width=8, dpi=300)
 
 
 if __name__ == '__main__':
