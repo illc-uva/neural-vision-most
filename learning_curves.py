@@ -40,15 +40,19 @@ def learning_plot(data, out_file=None):
         print(plot)
 
 
+def multi_training(model_roots, out_file):
+    frames = []
+    for model in model_roots:
+        train_data = pd.read_csv('results/{}_train_eval.csv'.format(model))
+        train_data['model'] = model
+        frames.append(train_data)
+    all_training = pd.concat(frames, ignore_index=True)
+    all_training['model'] = all_training['model'].astype(
+        'category', ordered=True, categories=model_roots)
+    learning_plot(all_training, out_file)
+
+
 if __name__ == '__main__':
 
     vggs = ['vgg{}'.format(vgg) for vgg in [7, 9, 11, 13]]
-    vgg_frames = []
-    for vgg in vggs:
-        train_data = pd.read_csv('results/{}_train_eval.csv'.format(vgg))
-        train_data['model'] = vgg
-        vgg_frames.append(train_data)
-    vgg_training = pd.concat(vgg_frames, ignore_index=True)
-    vgg_training['model'] = vgg_training['model'].astype(
-        'category', ordered=True, categories=vggs)
-    learning_plot(vgg_training, 'results/vgg_training.png')
+    multi_training(vggs, 'results/vgg_training.png')
