@@ -38,8 +38,8 @@ The results of our experiment are in the `results` directory.  To reproduce what
 
 1. Generate mean accuracy data from raw data: `python process_results.py`
 2. Descriptive plots:
-  * `python plots.py`
-  * `python learning_curves.py`
+    * `python plots.py`
+    * `python learning_curves.py`
 3. Regressions: `python regression.py`
 4. ANS model fits: `python weber_fit.py`
 
