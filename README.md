@@ -17,3 +17,7 @@ somewhat, and could be a source of errors.
 ## Running Trials/Experiments
 
 ## Analyzing Results
+
+## Image Generator
+
+While we provide train/val/test sets of images, they were all generated via `image_generator.py`.  The docstring at the top of that file contains more information about how to use it, should you want to generate new datasets manipulated in various ways (different size images, different ratios/cardinalities, more colors, etc.).
