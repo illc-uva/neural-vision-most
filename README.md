@@ -30,7 +30,7 @@ To predict, using the best model:
 
 This will generate a file `./ram/best/test_predict.csv` containing the predictions, and other information about the images.
 
-**N.B.:** note the first three command-line flags.  Currently, prediction can only happen by re-running `run.py` _after_ training.  This is a small bug that I will fix at some point.
+**N.B.:** note the first three command-line flags, which control the mode for the model.  Currently, prediction can only happen by re-running `run.py` _after_ training.  This is a small bug that I will fix at some point.
 
 ## Analyzing Results
 
