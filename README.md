@@ -34,6 +34,15 @@ This will generate a file `./ram/best/test_predict.csv` containing the predictio
 
 ## Analyzing Results
 
+The results of our experiment are in the `results` directory.  To reproduce what we report in the paper:
+
+1. Generate mean accuracy data from raw data: `python process_results.py`
+2. Descriptive plots:
+  * `python plots.py`
+  * `python learning_curves.py`
+3. Regressions: `python regression.py`
+4. ANS model fits: `python weber_fit.py`
+
 ## Image Generator
 
 While we provide train/val/test sets of images, they were all generated via `image_generator.py`.  The docstring at the top of that file contains more information about how to use it, should you want to generate new datasets manipulated in various ways (different size images, different ratios/cardinalities, more colors, etc.).
