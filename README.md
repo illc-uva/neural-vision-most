@@ -20,13 +20,20 @@ The basic script for training and evaluating a model (as well as getting predict
 
 An example for training a RAM (recurrent model of visual attention) with 24 glimpses and early-stopping, and evaluating the best-performing model:
 
-> `python run.py --model ram --num_glimpses 24 --out_path . --img_size 128 --grayscale --train_images images/small/train/*.png --test_images images/small/test/*.png --val_images images/small/val/*.png --num_epochs 200 --epochs_per_eval 2`
+```
+python run.py --model ram --num_glimpses 24 --out_path . --img_size 128 --grayscale \
+      --train_images images/small/train/*.png --test_images images/small/test/*.png --val_images images/small/val/*.png \
+      --num_epochs 200 --epochs_per_eval 2
+```
 
 This will save files (including checkpoints) to `./ram`.  `train_eval.csv` contains validation loss and accuracy over training, while `test_eval.csv` evalautes the best model. The best model is saved to `./ram/best`.
 
 To predict, using the best model:
 
-> `python run.py --no_train --no_eval --predict --model ram --num_glimpses 24 --out_path ./ram/best --img_size 128 --grayscale --train_images images/small/train/*.png --test_images images/small/test/*.png --val_images images/small/val/*.png`
+```
+python run.py --no_train --no_eval --predict --model ram --num_glimpses 24 --out_path ./ram/best --img_size 128 --grayscale \
+      --train_images images/small/train/*.png --test_images images/small/test/*.png --val_images images/small/val/*.png
+```
 
 This will generate a file `./ram/best/test_predict.csv` containing the predictions, and other information about the images.
 
